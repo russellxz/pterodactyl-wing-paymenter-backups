@@ -129,23 +129,16 @@ Te preguntará nombre, apellido, correo y contraseña (mínimo 8 caracteres). Co
 
 ### Paso 5 — Dejar el sistema encendido siempre (systemd)
 
-Esto hace que la página arranque sola al encender el VPS y se reinicie si falla.
+Esto hace que la página arranque sola al encender el VPS y se reinicie si falla. El servicio ya viene configurado para la instalación por defecto (`/opt/pterodactyl-backup`), no hay que editar nada.
 
 ```bash
 # Copia el archivo del servicio al sistema
 sudo cp deploy/pterobackups.service /etc/systemd/system/pterobackups.service
-
-# Ábrelo para revisar la ruta del proyecto
-sudo nano /etc/systemd/system/pterobackups.service
 ```
 
-Busca la línea `WorkingDirectory=` y asegúrate de que apunte a la carpeta real del proyecto. Como clonaste el repo en /opt, debe quedar así:
+> Solo si clonaste el proyecto en OTRA carpeta distinta: ábrelo con `sudo nano /etc/systemd/system/pterobackups.service` y cambia la línea `WorkingDirectory=` por tu ruta real.
 
-```
-WorkingDirectory=/opt/pterodactyl-backup
-```
-
-Guarda (`Ctrl + O`, `Enter`) y sal (`Ctrl + X`). Ahora activa el servicio:
+Ahora activa el servicio:
 
 ```bash
 # Recarga systemd para que detecte el servicio nuevo

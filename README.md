@@ -57,7 +57,7 @@ sudo apt update && sudo apt install -y zip unzip
 
 ## Instalación paso a paso (VPS del sistema)
 
-### Paso 1 — Instalar Node.js 18, Git y Nginx
+### Paso 1 — Instalar Node.js 22, Git y Nginx
 
 ```bash
 # Actualiza la lista de programas disponibles
@@ -68,15 +68,17 @@ sudo apt update
 # y nginx (el servidor web que mostrará la página)
 sudo apt install -y curl git build-essential python3 nginx
 
-# Agrega el repositorio oficial de Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# Agrega el repositorio oficial de Node.js 22 (versión LTS con soporte hasta 2027)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 
 # Instala Node.js
 sudo apt install -y nodejs
 
-# Comprueba que se instaló bien: debe mostrar v18 o superior
+# Comprueba que se instaló bien: debe mostrar v22.x
 node -v
 ```
+
+> **¿Ya habías instalado Node 18?** Ejecuta igualmente los dos primeros comandos (lo reemplazan por el 22) y, si ya habías hecho `npm install` en el proyecto, recompila las dependencias con: `cd /opt/pterodactyl-backup && sudo npm rebuild`
 
 ### Paso 2 — Descargar el proyecto
 

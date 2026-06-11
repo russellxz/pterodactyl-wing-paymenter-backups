@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · PteroBackups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><i data-lucide="database-backup"></i></span>
+      <span class="brand-name">Ptero<b>Backups</b></span>
+    </div>
+    <nav class="nav">
+      <a href="/" class="<%= active === 'dash' ? 'active' : '' %>"><i data-lucide="layout-dashboard"></i><span>Inicio</span></a>
+      <a href="/backups" class="<%= active === 'backups' ? 'active' : '' %>"><i data-lucide="archive"></i><span>Copias</span></a>
+      <a href="/nodes" class="<%= active === 'nodes' ? 'active' : '' %>"><i data-lucide="server"></i><span>Nodos y Panel</span></a>
+      <% if (can('manage_settings')) { %>
+      <a href="/settings" class="<%= active === 'settings' ? 'active' : '' %>"><i data-lucide="settings"></i><span>Configuración</span></a>
+      <% } %>
+      <% if (can('manage_admins')) { %>
+      <a href="/admins" class="<%= active === 'admins' ? 'active' : '' %>"><i data-lucide="users"></i><span>Administradores</span></a>
+      <% } %>
+      <% if (can('view_logs')) { %>
+      <a href="/logs" class="<%= active === 'logs' ? 'active' : '' %>"><i data-lucide="file-text"></i><span>Logs</span></a>
+      <% } %>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="me">
+        <i data-lucide="circle-user"></i>
+        <div>
+          <div class="me-name"><%= admin.first_name %> <%= admin.last_name %></div>
+          <div class="me-role"><%= admin.is_root ? 'Admin raíz' : 'Admin' %></div>
+        </div>
+      </div>
+      <a class="logout" href="/logout" title="Cerrar sesión"><i data-lucide="log-out"></i></a>
+    </div>
+  </aside>
+
+  <main class="content">
+    <% if (ok) { %><div class="alert alert-ok"><i data-lucide="check-circle-2"></i><span><%= ok %></span></div><% } %>
+    <% if (err) { %><div class="alert alert-err"><i data-lucide="alert-triangle"></i><span><%= err %></span></div><% } %>

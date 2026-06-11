@@ -1,0 +1,368 @@
+// src/backup.js - El corazón del sistema: crear copias (nodos y BD del panel),
+// restaurarlas, eliminarlas y limpiar copias antiguas automáticamente.
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const { db, getSetting } = require('./db');
+const { sq, exec, download, upload, withConn } = require('./ssh');
+const { decrypt } = require('./cipher');
+const logger = require('./logger');
+const bus = require('./bus');
+
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, '..', 'storage', 'backups');
+const SERVER_DIR = path.join(BACKUP_DIR, 'servers');
+const PANEL_DIR = path.join(BACKUP_DIR, 'panel');
+const ENV_DIR = path.join(PANEL_DIR, 'env'); // copias del archivo .env del panel
+[SERVER_DIR, PANEL_DIR, ENV_DIR].forEach((d) => fs.mkdirSync(d, { recursive: true }));
+
+const VOLUMES_PATH = '/var/lib/pterodactyl/volumes';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---------------------------------------------------------------------------
+// Estado de la tarea actual (se emite en tiempo real a la web por Socket.IO)
+// ---------------------------------------------------------------------------
+const job = { active: false, name: null, message: '', current: 0, total: 0 };
+
+function setJob(patch) {
+  Object.assign(job, patch);
+  bus.emit('progress', job);
+}
+
+// ---------------------------------------------------------------------------
+// Utilidades
+// ---------------------------------------------------------------------------
+function sanitize(text) {
+  return String(text || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9.@-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 60) || 'sin_nombre';
+}
+
+function stamp() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+}
+
+function nodeSsh(node) {
+  return { host: node.host, port: node.ssh_port, user: node.ssh_user, password: decrypt(node.ssh_password) };
+}
+
+function getPanelConfig() {
+  return db.prepare('SELECT * FROM panel_config WHERE id = 1').get() || null;
+}
+
+function panelSsh(p) {
+  return { host: p.host, port: p.ssh_port, user: p.ssh_user, password: decrypt(p.ssh_password) };
+}
+
+function backupFilePath(b) {
+  return path.join(b.type === 'panel_db' ? PANEL_DIR : SERVER_DIR, b.filename);
+}
+
+// ---------------------------------------------------------------------------
+// Lee la BD del panel para saber a quién pertenece cada servidor:
+// uuid -> { nombre del servidor, nombre y apellido del dueño, correo }
+// ---------------------------------------------------------------------------
+async function getPanelMeta() {
+  const p = getPanelConfig();
+  if (!p) throw new Error('Primero configura el Panel en "Nodos y Panel" (IP, SSH y base de datos).');
+  const query =
+    "SELECT s.uuid, REPLACE(REPLACE(s.name,'\\t',' '),'\\n',' '), u.name_first, u.name_last, u.email " +
+    'FROM servers s JOIN users u ON u.id = s.owner_id';
+  const cmd = `mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(decrypt(p.db_password))} ${sq(p.db_name)} -e ${sq(query)}`;
+  const out = await withConn(panelSsh(p), (conn) => exec(conn, cmd));
+  const meta = {};
+  out.split('\n').filter(Boolean).forEach((line) => {
+    const [uuid, name, first, last, email] = line.split('\t');
+    if (uuid) meta[uuid.trim()] = {
+      server_name: (name || uuid).trim(),
+      owner_name: `${first || ''} ${last || ''}`.trim() || 'Desconocido',
+      owner_email: (email || 'desconocido').trim(),
+    };
+  });
+  return meta;
+}
+
+// ---------------------------------------------------------------------------
+// Copia de TODOS los servidores de un nodo (un .zip por servidor)
+// ---------------------------------------------------------------------------
+async function backupNode(node, meta) {
+  await withConn(nodeSsh(node), async (conn) => {
+    const list = await exec(conn, `ls -1 ${VOLUMES_PATH} 2>/dev/null || true`);
+    const uuids = list.split('\n').map((s) => s.trim()).filter((s) => UUID_RE.test(s));
+    setJob({ total: job.total + uuids.length });
+    logger.info(`Nodo "${node.name}": ${uuids.length} servidores encontrados.`);
+
+    let i = 0;
+    for (const uuid of uuids) {
+      i++;
+      const m = meta[uuid] || { server_name: uuid, owner_name: 'Desconocido', owner_email: 'desconocido' };
+      setJob({ message: `Nodo ${node.name}: copiando "${m.server_name}" (${i}/${uuids.length})` });
+      try {
+        const remoteZip = `/tmp/pb_${uuid}_${Date.now()}.zip`;
+        const vol = `${VOLUMES_PATH}/${uuid}`;
+        const result = await exec(
+          conn,
+          `cd ${sq(vol)} && (zip -ryq ${sq(remoteZip)} . >/dev/null 2>&1; if [ -f ${sq(remoteZip)} ]; then echo OK; else echo VACIO; fi)`
+        );
+        if (result.trim() !== 'OK') {
+          logger.warn(`Servidor "${m.server_name}" (${uuid}) está vacío, se omite.`);
+          setJob({ current: job.current + 1 });
+          continue;
+        }
+        const filename = `${sanitize(m.owner_name)}__${sanitize(m.owner_email)}__${sanitize(m.server_name)}__${uuid}__${stamp()}.zip`;
+        const localPath = path.join(SERVER_DIR, filename);
+        await download(conn, remoteZip, localPath);
+        await exec(conn, `rm -f ${sq(remoteZip)}`).catch(() => {});
+        const size = fs.statSync(localPath).size;
+        db.prepare(
+          "INSERT INTO backups (type, node_id, server_uuid, server_name, owner_name, owner_email, filename, size) VALUES ('server', ?, ?, ?, ?, ?, ?, ?)"
+        ).run(node.id, uuid, m.server_name, m.owner_name, m.owner_email, filename, size);
+        logger.info(`Copia creada: ${m.server_name} — ${m.owner_email} (${(size / 1048576).toFixed(1)} MB)`);
+      } catch (e) {
+        logger.error(`Error copiando ${m.server_name} (${uuid}) en nodo "${node.name}": ${e.message}`);
+      }
+      setJob({ current: job.current + 1 });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Copia de la base de datos del panel (mysqldump) + archivo .env
+// ---------------------------------------------------------------------------
+async function backupPanelDb() {
+  const p = getPanelConfig();
+  if (!p) throw new Error('El panel no está configurado todavía.');
+  setJob({ message: 'Copiando la base de datos del panel...' });
+  const base = `pb_panel_${Date.now()}`;
+  const remoteSql = `/tmp/${base}.sql`;
+  const remoteEnv = `/tmp/${base}.env`;
+  const remoteZip = `/tmp/${base}.zip`;
+  const dbPass = decrypt(p.db_password);
+
+  await withConn(panelSsh(p), async (conn) => {
+    await exec(
+      conn,
+      `mysqldump -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(dbPass)} --single-transaction --routines --triggers ${sq(p.db_name)} > ${sq(remoteSql)}`
+    );
+    const hasEnv = (await exec(conn, `if cp ${sq(p.env_path)} ${sq(remoteEnv)} 2>/dev/null; then echo OK; else echo NO; fi`)).trim() === 'OK';
+    await exec(conn, `cd /tmp && zip -jq ${sq(remoteZip)} ${sq(remoteSql)} ${hasEnv ? sq(remoteEnv) : ''}`);
+
+    const filename = `panel_db__${sanitize(p.db_name)}__${stamp()}.zip`;
+    await download(conn, remoteZip, path.join(PANEL_DIR, filename));
+    if (hasEnv) {
+      // Guarda además una copia suelta del .env en su propia carpeta (muy importante para reinstalaciones)
+      await download(conn, remoteEnv, path.join(ENV_DIR, `env_${stamp()}.env`)).catch(() => {});
+    } else {
+      logger.warn(`No se encontró el archivo .env en ${p.env_path} (revisa la ruta en la configuración del panel).`);
+    }
+    await exec(conn, `rm -f ${sq(remoteSql)} ${sq(remoteEnv)} ${sq(remoteZip)}`).catch(() => {});
+
+    const size = fs.statSync(path.join(PANEL_DIR, filename)).size;
+    db.prepare(
+      "INSERT INTO backups (type, server_name, owner_name, owner_email, filename, size) VALUES ('panel_db', 'Base de datos del panel', '—', '—', ?, ?)"
+    ).run(filename, size);
+    logger.info(`Copia de la BD del panel creada: ${filename} (${(size / 1048576).toFixed(1)} MB)`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tarea principal: hacer copias (manual o automática)
+// target: 'both' (todo) | 'nodes' (solo nodos) | 'panel' (solo BD) — nodeId opcional
+// ---------------------------------------------------------------------------
+async function runBackup(opts = {}) {
+  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  const target = opts.target || getSetting('backup_target', 'both');
+  setJob({ active: true, name: 'Copia de seguridad', message: 'Iniciando...', current: 0, total: 0 });
+  try {
+    let meta = {};
+    if (target !== 'panel') {
+      setJob({ message: 'Leyendo usuarios y servidores del panel...' });
+      try {
+        meta = await getPanelMeta();
+      } catch (e) {
+        logger.warn(`No se pudo leer la BD del panel (las copias se nombrarán solo con el UUID): ${e.message}`);
+      }
+    }
+
+    if (target === 'panel' || target === 'both') {
+      setJob({ total: job.total + 1 });
+      try {
+        await backupPanelDb();
+      } catch (e) {
+        logger.error(`Error en la copia de la BD del panel: ${e.message}`);
+      }
+      setJob({ current: job.current + 1 });
+    }
+
+    if (target !== 'panel') {
+      const nodes = opts.nodeId
+        ? [db.prepare('SELECT * FROM nodes WHERE id = ?').get(opts.nodeId)].filter(Boolean)
+        : db.prepare('SELECT * FROM nodes').all();
+      if (!nodes.length && target !== 'panel') logger.warn('No hay nodos configurados para copiar.');
+      for (const node of nodes) {
+        try {
+          await backupNode(node, meta);
+        } catch (e) {
+          logger.error(`Error en el nodo "${node.name}": ${e.message}`);
+        }
+      }
+    }
+    logger.info('Tarea de copias finalizada.');
+  } finally {
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Restaurar la copia de UN servidor a su nodo
+// ---------------------------------------------------------------------------
+async function restoreServer(backupId, wipe = false) {
+  const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'server'").get(backupId);
+  if (!b) throw new Error('La copia no existe.');
+  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  setJob({ active: true, name: 'Restauración', message: `Restaurando "${b.server_name}"...`, current: 0, total: 1 });
+  try {
+    await restoreServerRow(b, wipe);
+    setJob({ current: 1 });
+  } finally {
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null });
+  }
+}
+
+async function restoreServerRow(b, wipe) {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(b.node_id);
+  if (!node) throw new Error(`El nodo de la copia "${b.server_name}" ya no existe en el sistema.`);
+  const localPath = backupFilePath(b);
+  if (!fs.existsSync(localPath)) throw new Error(`El archivo ${b.filename} ya no existe en el disco.`);
+
+  await withConn(nodeSsh(node), async (conn) => {
+    const vol = `${VOLUMES_PATH}/${b.server_uuid}`;
+    const exists = (await exec(conn, `if [ -d ${sq(vol)} ]; then echo OK; else echo NO; fi`)).trim() === 'OK';
+    if (!exists) throw new Error(`El volumen del servidor ${b.server_uuid} no existe en el nodo "${node.name}". ¿El servidor sigue creado en el panel?`);
+
+    const remoteZip = `/tmp/pb_restore_${Date.now()}.zip`;
+    await upload(conn, localPath, remoteZip);
+    if (wipe) await exec(conn, `find ${sq(vol)} -mindepth 1 -delete`);
+    await exec(conn, `unzip -oq ${sq(remoteZip)} -d ${sq(vol)}`);
+    await exec(conn, `chown -R pterodactyl:pterodactyl ${sq(vol)} 2>/dev/null || true; rm -f ${sq(remoteZip)}`).catch(() => {});
+  });
+  logger.info(`Restaurado "${b.server_name}" (${b.owner_email}) en el nodo correspondiente.`);
+}
+
+// ---------------------------------------------------------------------------
+// Restaurar TODOS los servidores (la copia más reciente de cada uno).
+// nodeId opcional para restaurar solo un nodo.
+// ---------------------------------------------------------------------------
+async function restoreAll(nodeId = null, wipe = false) {
+  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  let sql =
+    "SELECT b.* FROM backups b JOIN (SELECT server_uuid, MAX(id) AS mid FROM backups WHERE type = 'server' GROUP BY server_uuid) x ON x.mid = b.id";
+  const params = [];
+  if (nodeId) { sql += ' WHERE b.node_id = ?'; params.push(nodeId); }
+  const rows = db.prepare(sql).all(...params);
+  if (!rows.length) throw new Error('No hay copias de servidores para restaurar.');
+
+  setJob({ active: true, name: 'Restauración masiva', message: 'Iniciando...', current: 0, total: rows.length });
+  try {
+    for (const b of rows) {
+      setJob({ message: `Restaurando "${b.server_name}" (${job.current + 1}/${rows.length})` });
+      try {
+        await restoreServerRow(b, wipe);
+      } catch (e) {
+        logger.error(`No se pudo restaurar "${b.server_name}": ${e.message}`);
+      }
+      setJob({ current: job.current + 1 });
+    }
+    logger.info(`Restauración masiva finalizada (${rows.length} servidores procesados).`);
+  } finally {
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Restaurar la BD del panel (al mismo VPS o a uno nuevo)
+// target: null = usar la configuración guardada del panel, o un objeto
+// { host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name }
+// ---------------------------------------------------------------------------
+async function restorePanelDb(backupId, target = null) {
+  const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'panel_db'").get(backupId);
+  if (!b) throw new Error('La copia de la base de datos no existe.');
+  const localPath = backupFilePath(b);
+  if (!fs.existsSync(localPath)) throw new Error('El archivo .zip ya no existe en el disco.');
+  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+
+  let cfg, dbUser, dbPass, dbName;
+  if (target && target.host) {
+    cfg = { host: target.host, port: target.ssh_port || 22, user: target.ssh_user || 'root', password: target.ssh_password };
+    dbUser = target.db_user || 'pterodactyl';
+    dbPass = target.db_password;
+    dbName = target.db_name || 'panel';
+  } else {
+    const p = getPanelConfig();
+    if (!p) throw new Error('No hay configuración del panel guardada.');
+    cfg = panelSsh(p);
+    dbUser = p.db_user;
+    dbPass = decrypt(p.db_password);
+    dbName = p.db_name;
+  }
+
+  setJob({ active: true, name: 'Restauración de BD', message: `Restaurando BD del panel en ${cfg.host}...`, current: 0, total: 1 });
+  try {
+    await withConn(cfg, async (conn) => {
+      const dir = `/tmp/pb_dbrestore_${Date.now()}`;
+      const remoteZip = `${dir}.zip`;
+      await upload(conn, localPath, remoteZip);
+      await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
+      await exec(
+        conn,
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "El zip no contiene un .sql" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+      );
+      await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
+    });
+    setJob({ current: 1 });
+    logger.info(`Base de datos del panel restaurada en ${cfg.host}. Recuerda: el .zip también incluye el archivo .env por si necesitas restaurarlo a mano en /var/www/pterodactyl/.env`);
+  } finally {
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Eliminar copias
+// ---------------------------------------------------------------------------
+function deleteBackup(id) {
+  const b = db.prepare('SELECT * FROM backups WHERE id = ?').get(id);
+  if (!b) throw new Error('La copia no existe.');
+  try { fs.unlinkSync(backupFilePath(b)); } catch (e) { /* el archivo ya no estaba */ }
+  db.prepare('DELETE FROM backups WHERE id = ?').run(id);
+  logger.info(`Copia eliminada: ${b.filename}`);
+}
+
+// Limpieza automática de copias antiguas según la retención configurada
+function cleanupOld() {
+  const hours = parseInt(getSetting('retention_hours', '0'), 10);
+  if (!hours) return;
+  const rows = db.prepare("SELECT * FROM backups WHERE created_at < datetime('now', 'localtime', ?)").all(`-${hours} hours`);
+  for (const b of rows) {
+    try { fs.unlinkSync(backupFilePath(b)); } catch (e) { /* ignorar */ }
+    db.prepare('DELETE FROM backups WHERE id = ?').run(b.id);
+  }
+  if (rows.length) logger.info(`Limpieza automática: ${rows.length} copias antiguas eliminadas (más de ${hours} horas).`);
+}
+
+module.exports = {
+  job,
+  BACKUP_DIR,
+  backupFilePath,
+  getPanelConfig,
+  runBackup,
+  restoreServer,
+  restoreAll,
+  restorePanelDb,
+  deleteBackup,
+  cleanupOld,
+};

@@ -1,0 +1,13 @@
+# Dependencias
+node_modules/
+
+# Configuración con secretos (NUNCA subir a GitHub)
+.env
+
+# Base de datos local y copias de seguridad
+data/
+storage/
+
+# Otros
+*.log
+.DS_Store

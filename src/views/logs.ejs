@@ -1,0 +1,32 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Logs</h1>
+  <p>Registro de actividad y errores del sistema, en tiempo real.</p>
+</header>
+
+<section class="card">
+  <div class="toolbar">
+    <span class="muted small">Se muestran los últimos 300 registros. Los nuevos aparecen arriba automáticamente.</span>
+    <% if (admin.is_root) { %>
+    <form method="post" action="/logs/clear" class="inline" data-confirm="¿Vaciar todos los registros?">
+      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Vaciar logs</button>
+    </form>
+    <% } %>
+  </div>
+
+  <div class="logbox" id="logbox">
+    <% if (!logs.length) { %>
+    <p class="empty"><i data-lucide="inbox"></i>Todavía no hay registros.</p>
+    <% } %>
+    <% logs.forEach(l => { %>
+    <div class="log-line log-<%= l.level %>">
+      <span class="log-time"><%= l.created_at %></span>
+      <span class="log-level"><%= l.level %></span>
+      <span class="log-msg"><%= l.message %></span>
+    </div>
+    <% }) %>
+  </div>
+</section>
+
+<%- include('partials/foot') %>

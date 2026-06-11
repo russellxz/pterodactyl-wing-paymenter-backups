@@ -1,0 +1,26 @@
+{
+  "name": "pterobackups",
+  "version": "1.0.0",
+  "description": "Sistema web de copias de seguridad remotas para Pterodactyl: base de datos del panel y archivos de cada servidor en los nodos (Wings).",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "create-admin": "node src/create-admin.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "memorystore": "^1.6.7",
+    "node-cron": "^3.0.3",
+    "socket.io": "^4.7.5",
+    "ssh2": "^1.16.0"
+  }
+}

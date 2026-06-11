@@ -1,0 +1,68 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Inicio</h1>
+  <p>Resumen general del sistema de copias.</p>
+</header>
+
+<%- include('partials/job') %>
+
+<section class="stats-grid">
+  <div class="card stat">
+    <i data-lucide="server"></i>
+    <div><span class="stat-num"><%= stats.nodes %></span><span class="stat-label">Nodos</span></div>
+  </div>
+  <div class="card stat">
+    <i data-lucide="archive"></i>
+    <div><span class="stat-num"><%= stats.backups %></span><span class="stat-label">Copias guardadas</span></div>
+  </div>
+  <div class="card stat">
+    <i data-lucide="hard-drive"></i>
+    <div><span class="stat-num"><%= (stats.size / 1073741824).toFixed(2) %> GB</span><span class="stat-label">Espacio usado</span></div>
+  </div>
+  <div class="card stat">
+    <i data-lucide="clock"></i>
+    <div><span class="stat-num stat-small"><%= stats.last ? stats.last.created_at : 'Nunca' %></span><span class="stat-label">Última copia</span></div>
+  </div>
+</section>
+
+<% if (can('run_backups')) { %>
+<section class="card">
+  <h2><i data-lucide="zap"></i>Copia manual</h2>
+  <p class="muted">Lanza una copia de seguridad ahora mismo, sin esperar a la programación automática.</p>
+  <form method="post" action="/backups/run" class="form-inline">
+    <select name="target" id="target-select" onchange="document.getElementById('node-pick').hidden = this.value !== 'node'">
+      <option value="both">Todo (nodos + BD del panel)</option>
+      <option value="nodes">Solo nodos (archivos de servidores)</option>
+      <option value="panel">Solo base de datos del panel</option>
+      <% if (nodes.length) { %><option value="node">Un nodo específico</option><% } %>
+    </select>
+    <select name="node_id" id="node-pick" hidden>
+      <% nodes.forEach(n => { %><option value="<%= n.id %>"><%= n.name %></option><% }) %>
+    </select>
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia ahora</button>
+  </form>
+</section>
+<% } %>
+
+<% if (!stats.panelConfigured || stats.nodes === 0) { %>
+<section class="card guide">
+  <h2><i data-lucide="compass"></i>Primeros pasos</h2>
+  <ol class="guide-list">
+    <li><i data-lucide="database"></i><div><b>Configura el panel.</b> En <a href="/nodes">Nodos y Panel</a> escribe la IP del VPS donde está instalado Pterodactyl, su contraseña SSH y los datos de la base de datos (usuario, contraseña y nombre, normalmente <code>pterodactyl</code> / <code>panel</code>; están en el archivo <code>/var/www/pterodactyl/.env</code>). Esto permite copiar la BD y saber a qué usuario pertenece cada servidor.</div></li>
+    <li><i data-lucide="server"></i><div><b>Agrega tus nodos (Wings).</b> En la misma página, agrega cada nodo con su IP y contraseña SSH. Recuerda instalar <code>zip</code> y <code>unzip</code> en cada nodo: <code>sudo apt update && sudo apt install -y zip unzip</code>.</div></li>
+    <li><i data-lucide="settings"></i><div><b>Programa las copias.</b> En <a href="/settings">Configuración</a> elige cada cuánto se hacen copias automáticas (1 hora, 1, 7, 15 o 30 días) y cuándo se borran las copias antiguas.</div></li>
+    <li><i data-lucide="play"></i><div><b>Haz tu primera copia.</b> Usa el botón "Hacer copia ahora" y sigue el progreso en tiempo real.</div></li>
+  </ol>
+</section>
+<% } else { %>
+<section class="card">
+  <h2><i data-lucide="calendar-clock"></i>Programación actual</h2>
+  <div class="kv">
+    <div><span class="muted">Copias automáticas:</span> <b><%= stats.scheduleHours == 0 ? 'Desactivadas' : (stats.scheduleHours == 1 ? 'Cada hora' : 'Cada ' + (stats.scheduleHours / 24) + ' día(s)') %></b></div>
+    <div><span class="muted">Borrado de copias antiguas:</span> <b><%= stats.retentionHours == 0 ? 'Nunca' : 'Con más de ' + (stats.retentionHours >= 24 ? (stats.retentionHours / 24) + ' día(s)' : stats.retentionHours + ' hora(s)') %></b></div>
+  </div>
+</section>
+<% } %>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,48 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Configuración</h1>
+  <p>Programa las copias automáticas y el borrado de copias antiguas.</p>
+</header>
+
+<section class="card">
+  <form method="post" action="/settings" class="form">
+    <label><i data-lucide="calendar-clock"></i>Copias automáticas
+      <select name="schedule_hours">
+        <option value="0" <%= scheduleHours == '0' ? 'selected' : '' %>>Desactivadas</option>
+        <option value="1" <%= scheduleHours == '1' ? 'selected' : '' %>>Cada 1 hora</option>
+        <option value="24" <%= scheduleHours == '24' ? 'selected' : '' %>>Cada 1 día</option>
+        <option value="168" <%= scheduleHours == '168' ? 'selected' : '' %>>Cada 7 días</option>
+        <option value="360" <%= scheduleHours == '360' ? 'selected' : '' %>>Cada 15 días</option>
+        <option value="720" <%= scheduleHours == '720' ? 'selected' : '' %>>Cada 30 días</option>
+      </select>
+    </label>
+
+    <label><i data-lucide="target"></i>Qué se copia automáticamente
+      <select name="backup_target">
+        <option value="both" <%= backupTarget == 'both' ? 'selected' : '' %>>Todo (nodos + BD del panel)</option>
+        <option value="nodes" <%= backupTarget == 'nodes' ? 'selected' : '' %>>Solo nodos (archivos de servidores)</option>
+        <option value="panel" <%= backupTarget == 'panel' ? 'selected' : '' %>>Solo base de datos del panel</option>
+      </select>
+    </label>
+
+    <label><i data-lucide="trash-2"></i>Borrar copias antiguas
+      <select name="retention_hours">
+        <option value="0" <%= retentionHours == '0' ? 'selected' : '' %>>Nunca (conservar todo)</option>
+        <option value="1" <%= retentionHours == '1' ? 'selected' : '' %>>Con más de 1 hora</option>
+        <option value="24" <%= retentionHours == '24' ? 'selected' : '' %>>Con más de 1 día</option>
+        <option value="168" <%= retentionHours == '168' ? 'selected' : '' %>>Con más de 7 días</option>
+        <option value="360" <%= retentionHours == '360' ? 'selected' : '' %>>Con más de 15 días</option>
+        <option value="720" <%= retentionHours == '720' ? 'selected' : '' %>>Con más de 30 días</option>
+      </select>
+    </label>
+
+    <p class="muted small">El sistema revisa la programación cada 10 minutos. Si activas el borrado automático, asegúrate de que el intervalo de copias sea menor que la retención para no quedarte sin copias.</p>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar configuración</button>
+    </div>
+  </form>
+</section>
+
+<%- include('partials/foot') %>

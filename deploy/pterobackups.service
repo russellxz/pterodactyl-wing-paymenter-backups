@@ -1,0 +1,26 @@
+# deploy/pterobackups.service - Servicio de systemd para PteroBackups
+#
+# 1. Copia este archivo a /etc/systemd/system/pterobackups.service
+#    (ajusta WorkingDirectory si clonaste el proyecto en otra ruta).
+# 2. Activa y arranca el servicio:
+#       sudo systemctl daemon-reload
+#       sudo systemctl enable --now pterobackups
+# 3. Ver el estado y los logs:
+#       sudo systemctl status pterobackups
+#       sudo journalctl -u pterobackups -f
+
+[Unit]
+Description=PteroBackups - Sistema de copias de seguridad para Pterodactyl
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/pterobackups
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

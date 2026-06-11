@@ -1,0 +1,76 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Nodos y Panel</h1>
+  <p>Conecta el panel de Pterodactyl y los nodos (Wings) por SSH para poder hacer las copias.</p>
+</header>
+
+<section class="card">
+  <h2><i data-lucide="database"></i>Panel de Pterodactyl (base de datos)</h2>
+  <p class="muted">VPS donde está instalado el panel. Sirve para copiar la base de datos completa, el archivo <code>.env</code>, y para saber el nombre, apellido y correo del dueño de cada servidor. Los datos de la BD están en <code>/var/www/pterodactyl/.env</code> (variables <code>DB_USERNAME</code>, <code>DB_PASSWORD</code> y <code>DB_DATABASE</code>).</p>
+  <form method="post" action="/panel" class="form-grid">
+    <label>IP del panel<input name="host" required value="<%= panel ? panel.host : '' %>" placeholder="203.0.113.10"></label>
+    <label>Puerto SSH<input name="ssh_port" type="number" value="<%= panel ? panel.ssh_port : 22 %>"></label>
+    <label>Usuario SSH<input name="ssh_user" value="<%= panel ? panel.ssh_user : 'root' %>"></label>
+    <label>Contraseña SSH<input name="ssh_password" type="password" placeholder="<%= panel ? '(guardada, deja vacío para no cambiarla)' : 'Contraseña SSH' %>" <%= panel ? '' : 'required' %>></label>
+    <label>Usuario de la BD<input name="db_user" value="<%= panel ? panel.db_user : 'pterodactyl' %>"></label>
+    <label>Contraseña de la BD<input name="db_password" type="password" placeholder="<%= panel ? '(guardada, deja vacío para no cambiarla)' : 'Contraseña de la base de datos' %>" <%= panel ? '' : 'required' %>></label>
+    <label>Nombre de la BD<input name="db_name" value="<%= panel ? panel.db_name : 'panel' %>"></label>
+    <label>Ruta del archivo .env<input name="env_path" value="<%= panel ? panel.env_path : '/var/www/pterodactyl/.env' %>"></label>
+    <div class="form-actions">
+      <% if (can('manage_nodes')) { %>
+      <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar panel</button>
+      <% if (panel) { %><button class="btn" type="button" onclick="testConnection('/panel/test', this)"><i data-lucide="plug-zap"></i>Probar conexión</button><% } %>
+      <% } %>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2><i data-lucide="server"></i>Nodos (Wings)</h2>
+  <p class="muted">Cada nodo es un VPS con Wings instalado. El sistema entra por SSH, comprime los archivos de cada servidor en <code>/var/lib/pterodactyl/volumes</code> y descarga los .zip. En cada nodo instala antes: <code>sudo apt update && sudo apt install -y zip unzip</code>.</p>
+
+  <% if (nodes.length) { %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>IP</th><th>Puerto</th><th>Usuario</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <% nodes.forEach(n => { %>
+        <tr>
+          <td><b><%= n.name %></b></td>
+          <td><%= n.host %></td>
+          <td><%= n.ssh_port %></td>
+          <td><%= n.ssh_user %></td>
+          <td class="row-actions">
+            <% if (can('manage_nodes')) { %>
+            <button class="btn btn-sm" type="button" onclick="testConnection('/nodes/<%= n.id %>/test', this)" title="Probar conexión"><i data-lucide="plug-zap"></i></button>
+            <form method="post" action="/nodes/<%= n.id %>/delete" class="inline" data-confirm="¿Eliminar el nodo &quot;<%= n.name %>&quot;? Sus copias ya descargadas se conservan.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar nodo"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay nodos. Agrega el primero aquí abajo.</p>
+  <% } %>
+
+  <% if (can('manage_nodes')) { %>
+  <h3 class="sub-title">Agregar nodo</h3>
+  <form method="post" action="/nodes" class="form-grid">
+    <label>Nombre del nodo<input name="name" required placeholder="Nodo 1 - Alemania"></label>
+    <label>IP del nodo<input name="host" required placeholder="203.0.113.20"></label>
+    <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
+    <label>Usuario SSH<input name="ssh_user" value="root"></label>
+    <label>Contraseña SSH<input name="ssh_password" type="password" required placeholder="Contraseña SSH"></label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar nodo</button>
+    </div>
+  </form>
+  <% } %>
+</section>
+
+<%- include('partials/foot') %>

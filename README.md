@@ -270,22 +270,71 @@ sudo npm install
 sudo systemctl restart pterobackups
 ```
 
-## Para desarrolladores: subir cambios a GitHub (push)
+---
 
-Si modificaste el código y quieres subirlo al repositorio:
+## Extensión para el panel de Pterodactyl (Backup 2.0)
+
+La extensión conecta tu panel de Pterodactyl con esta página de copias:
+
+- **Admins del panel:** nueva sección **PteroBackups** en el área admin con todo lo de la página: hacer copias al momento, cancelar, progreso en vivo, contador de la próxima copia automática, fechas de copia por nodo, buscador de servidores por nombre o correo, descargar, restaurar, eliminar y cambiar la programación.
+- **Usuarios:** opción **"Backup 2.0"** en el menú lateral de su servidor para ver, **descargar** y **restaurar** SOLO las copias de su servidor. Si el tema del panel impide poner el botón en el menú, aparece un **botón flotante** abajo a la derecha que lleva a la misma página.
+- **Compatible con el tema Arix v2** y con cualquier otro tema: la extensión **no recompila el panel** (que es lo que rompe los temas), y el botón del menú copia el diseño del tema activo.
+
+### Paso 1 — Copiar los datos de conexión
+
+En **esta página de copias**, entra a **Configuración** y busca la tarjeta **"Extensión del panel"**. Ahí están los dos datos que necesitarás: la **URL del sistema** y la **clave de API**. Tenlos a mano (tócalos para seleccionarlos y copiarlos).
+
+### Paso 2 — Instalar la extensión en el VPS del panel
+
+Conéctate por SSH **al VPS donde está instalado el panel** de Pterodactyl (no al del sistema de copias, salvo que tengas ambos en el mismo VPS) y ejecuta:
 
 ```bash
-# Marca todos los archivos modificados
-git add .
+# Entra a la carpeta /opt
+cd /opt
 
-# Guarda los cambios con una descripción
-git commit -m "Describe aquí qué cambiaste"
+# Descarga el proyecto (si ya tienes la carpeta de antes, sáltate este comando)
+sudo git clone https://github.com/russellxz/pterodactyl-backup.git
 
-# Súbelos a GitHub
-git push
+# Entra a la carpeta de la extensión
+cd pterodactyl-backup/extension
+
+# Instala la extensión en el panel
+sudo bash install.sh
 ```
 
-> El `.gitignore` ya evita que se suban `.env`, la base de datos local (`data/`) y las copias (`storage/`): son datos privados de cada instalación.
+El instalador copia las piezas al panel, agrega las rutas y limpia las cachés. Al final imprime varias líneas que empiezan con `OK:` y el mensaje "Extensión PteroBackups instalada correctamente".
+
+> Si tu panel **no** está en la carpeta normal (`/var/www/pterodactyl`), indícale la ruta: `sudo bash install.sh /ruta/de/tu/panel`
+
+### Paso 3 — Conectar el panel con el sistema de copias
+
+1. Abre `https://TU-PANEL/admin/pterobackups` (también aparece **PteroBackups** en el menú del área admin).
+2. Pega la **URL** y la **clave de API** del Paso 1.
+3. Pulsa **Guardar y probar conexión**. Debe decir **"Conexión correcta"**.
+
+Recarga el panel con `Ctrl + F5`, entra a cualquier servidor y verás **"Backup 2.0"** en el menú (o el botón flotante). La conexión queda guardada en la base de datos del panel: si algún día reinstalas el panel con la misma BD, solo vuelve a ejecutar `install.sh` y reconecta sola.
+
+### Actualizar la extensión cuando haya cambios
+
+```bash
+# En el VPS del panel: descarga los cambios y reinstala
+cd /opt/pterodactyl-backup
+sudo git pull
+cd extension
+sudo bash install.sh
+```
+
+### Desinstalar o diagnosticar
+
+```bash
+# Quitar la extensión del panel (la conexión guardada se conserva)
+cd /opt/pterodactyl-backup/extension && sudo bash uninstall.sh
+
+# Si algo no aparece: imprime un informe completo de diagnóstico
+cd /opt/pterodactyl-backup/extension && sudo bash check.sh
+```
+
+Más detalles y solución de problemas de la extensión en [`extension/README.md`](extension/README.md).
 
 ---
 

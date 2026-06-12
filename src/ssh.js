@@ -41,21 +41,39 @@ function exec(conn, command) {
   });
 }
 
-function download(conn, remotePath, localPath) {
-  return new Promise((resolve, reject) => {
-    conn.sftp((err, sftp) => {
-      if (err) return reject(err);
-      sftp.fastGet(remotePath, localPath, (e) => (e ? reject(e) : resolve()));
+// Abre UNA sola sesión SFTP por conexión y la reutiliza para todas las
+// descargas y subidas. (Antes se abría una nueva por cada archivo y nunca se
+// cerraba: los VPS permiten ~10 canales por conexión SSH, así que en nodos
+// con más de 10 servidores las copias fallaban con "Channel open failure".)
+function sftpFor(conn) {
+  if (conn._pbSftp) return Promise.resolve(conn._pbSftp);
+  if (!conn._pbSftpPromise) {
+    conn._pbSftpPromise = new Promise((resolve, reject) => {
+      conn.sftp((err, sftp) => {
+        if (err) {
+          conn._pbSftpPromise = null;
+          return reject(err);
+        }
+        sftp.on('close', () => { conn._pbSftp = null; conn._pbSftpPromise = null; });
+        conn._pbSftp = sftp;
+        resolve(sftp);
+      });
     });
+  }
+  return conn._pbSftpPromise;
+}
+
+async function download(conn, remotePath, localPath) {
+  const sftp = await sftpFor(conn);
+  return new Promise((resolve, reject) => {
+    sftp.fastGet(remotePath, localPath, (e) => (e ? reject(e) : resolve()));
   });
 }
 
-function upload(conn, localPath, remotePath) {
+async function upload(conn, localPath, remotePath) {
+  const sftp = await sftpFor(conn);
   return new Promise((resolve, reject) => {
-    conn.sftp((err, sftp) => {
-      if (err) return reject(err);
-      sftp.fastPut(localPath, remotePath, (e) => (e ? reject(e) : resolve()));
-    });
+    sftp.fastPut(localPath, remotePath, (e) => (e ? reject(e) : resolve()));
   });
 }
 

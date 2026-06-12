@@ -19,6 +19,7 @@ sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/admin.php" 2>/d
 # Quitar scripts inyectados
 sed -i '\#pterobackups/inject.js#d' "$PANEL/resources/views/templates/wrapper.blade.php" 2>/dev/null || true
 sed -i '\#pterobackups/admin-inject.js#d' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null || true
+sed -i "\\#pterobackups/inject.js#d" "$PANEL/resources/views/layouts/scripts.blade.php" 2>/dev/null || true
 
 # Quitar archivos
 rm -rf "$PANEL/app/Http/Controllers/PteroBackups" \

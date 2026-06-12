@@ -293,7 +293,13 @@ async function restoreServerRow(b, wipe) {
   await withConn(nodeSsh(node), async (conn) => {
     const vol = `${VOLUMES_PATH}/${b.server_uuid}`;
     const exists = (await exec(conn, `if [ -d ${sq(vol)} ]; then echo OK; else echo NO; fi`)).trim() === 'OK';
-    if (!exists) throw new Error(`El volumen del servidor ${b.server_uuid} no existe en el nodo "${node.name}". ¿El servidor sigue creado en el panel?`);
+    if (!exists) {
+      // El volumen no existe. Pasa cuando se borraron servidores y luego se
+      // restauró la BD del panel: Wings eliminó la carpeta al borrar el servidor.
+      // En vez de fallar, creamos la carpeta y restauramos dentro.
+      await exec(conn, `mkdir -p ${sq(vol)}`);
+      logger.warn(`El volumen de "${b.server_name}" no existía en el nodo: se creó de nuevo. Reinicia Wings en ese nodo (systemctl restart wings) para que el panel vuelva a conectar con el servidor.`);
+    }
 
     const remoteZip = `/tmp/pb_restore_${Date.now()}.zip`;
     await upload(conn, localPath, remoteZip);
@@ -376,7 +382,7 @@ async function restorePanelDb(backupId, target = null) {
       await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
     });
     setJob({ current: 1 });
-    logger.info(`Base de datos restaurada en ${label}. El .zip también incluye el archivo .env por si necesitas restaurarlo a mano.`);
+    logger.info(`Base de datos restaurada en ${label}. Si habías borrado servidores, reinicia Wings en cada nodo (systemctl restart wings) para que el panel reconecte con ellos, y después restaura sus archivos. El .zip también incluye el archivo .env por si necesitas restaurarlo a mano.`);
   } finally {
     setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
   }

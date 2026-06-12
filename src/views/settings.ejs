@@ -45,4 +45,22 @@
   </form>
 </section>
 
+<section class="card">
+  <h2><i data-lucide="puzzle"></i>Extensión del panel de Pterodactyl</h2>
+  <p class="muted">Conecta tu panel con este sistema: instala la extensión (carpeta <code>extension/</code> del proyecto, instrucciones en su README) y pega estos dos datos en <code>https://TU-PANEL/admin/pterobackups</code>. Los admins del panel podrán gestionar las copias y cada usuario verá las de su servidor.</p>
+  <div class="form-grid">
+    <label>URL de este sistema
+      <input readonly value="<%= extUrl %>" onclick="this.select()">
+    </label>
+    <label>Clave de API
+      <input readonly value="<%= extApiKey %>" onclick="this.select()">
+    </label>
+  </div>
+  <div class="form-actions">
+    <form method="post" action="/settings/regen-key" class="inline" data-confirm="¿Generar una clave NUEVA? La extensión del panel dejará de funcionar hasta que pegues la clave nueva en /admin/pterobackups.">
+      <button class="btn btn-warn" type="submit"><i data-lucide="refresh-ccw"></i>Regenerar clave</button>
+    </form>
+  </div>
+</section>
+
 <%- include('partials/foot') %>

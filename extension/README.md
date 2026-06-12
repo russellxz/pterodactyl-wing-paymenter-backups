@@ -3,7 +3,7 @@
 Conecta tu panel de Pterodactyl con el sistema de copias **PteroBackups**:
 
 - **Admins (raíz):** nueva sección **PteroBackups** en el área admin con TODO lo de la página: hacer copias manuales, cancelar, ver el progreso en tiempo real, contador de la próxima copia automática, ver las fechas de copia de cada nodo, buscar el servidor de un usuario, descargar, restaurar (un servidor o una fecha completa), eliminar y cambiar la programación.
-- **Usuarios:** nueva opción **"Copias Remotas"** en el menú lateral de su servidor (junto a Consola, Archivos...). Cada usuario ve SOLO las copias de su servidor, las puede **descargar** y **restaurar**. Si no hay copias, lo verá indicado.
+- **Usuarios:** nueva opción **"Backup 2.0"** en el menú lateral de su servidor (junto a Consola, Archivos...). Cada usuario ve SOLO las copias de su servidor, las puede **descargar** y **restaurar**. Si no hay copias, lo verá indicado.
 
 ## Compatible con el tema Arix v2 (y cualquier otro tema)
 
@@ -54,7 +54,7 @@ sudo bash uninstall.sh
 
 ## Solución de problemas
 
-- **No aparece "Copias Remotas" en el menú del servidor:** recarga con `Ctrl + F5` (caché del navegador). Comprueba que el script quedó inyectado: `grep pterobackups /var/www/pterodactyl/resources/views/templates/wrapper.blade.php` y limpia vistas: `cd /var/www/pterodactyl && php artisan view:clear`.
+- **No aparece "Backup 2.0" en el menú del servidor:** recarga con `Ctrl + F5` (caché del navegador). Comprueba que el script quedó inyectado: `grep pterobackups /var/www/pterodactyl/resources/views/templates/wrapper.blade.php` y limpia vistas: `cd /var/www/pterodactyl && php artisan view:clear`.
 - **/admin/pterobackups da 404:** limpia las rutas: `cd /var/www/pterodactyl && php artisan route:clear`.
 - **Error 500:** mira el log del panel: `tail -50 /var/www/pterodactyl/storage/logs/laravel-$(date +%F).log` y ejecuta `cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload -o`.
 - **"No se pudo conectar" al guardar:** comprueba que la URL del sistema abre en el navegador y que la clave es la de **Configuración → Extensión del panel** (sin espacios). Si regeneraste la clave en el sistema, pégala de nuevo aquí.

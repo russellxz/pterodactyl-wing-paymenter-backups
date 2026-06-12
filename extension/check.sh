@@ -31,6 +31,10 @@ grep -q 'PteroBackups START' "$PANEL/routes/base.php" 2>/dev/null && echo "    b
 grep -q 'PteroBackups START' "$PANEL/routes/admin.php" 2>/dev/null && echo "    admin.php OK" || echo "    admin.php SIN RUTAS -> corre install.sh"
 
 echo ""
+echo "[4b] Ruta comodín de React (debe dejar pasar /pterobackups):"
+grep -q 'api|auth|admin|daemon|pterobackups' "$PANEL/routes/base.php" 2>/dev/null && echo "    OK" || echo "    SIN AJUSTAR -> corre: sudo bash install.sh"
+
+echo ""
 echo "[5] TODAS las plantillas de página que tiene el panel (con </body>):"
 grep -rl '</body>' "$PANEL/resources/views" 2>/dev/null | grep -vi 'mail\|vendor\|pterobackups' || echo "    (ninguna encontrada)"
 

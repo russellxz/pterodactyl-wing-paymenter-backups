@@ -12,6 +12,9 @@ fi
 
 echo "==> Desinstalando la extensión PteroBackups de: $PANEL"
 
+# Revertir el ajuste de la ruta comodín de React
+sed -i 's#api|auth|admin|daemon|pterobackups#api|auth|admin|daemon#g' "$PANEL/routes/base.php" 2>/dev/null || true
+
 # Quitar rutas
 sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/base.php" 2>/dev/null || true
 sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/admin.php" 2>/dev/null || true

@@ -37,6 +37,20 @@ if ! grep -q 'PteroBackups START' "$PANEL/routes/admin.php"; then
   echo "    Rutas de admin agregadas a routes/admin.php"
 fi
 
+# 2b) La ruta comodín de React del panel atrapa cualquier dirección que no
+#     empiece por api/auth/admin/daemon y se la queda (mostrando su 404).
+#     Hay que excluir /pterobackups para que nuestras páginas de usuario
+#     lleguen a sus rutas.
+if grep -q 'api|auth|admin|daemon|pterobackups' "$PANEL/routes/base.php"; then
+  echo "    Ruta comodín de React ya estaba ajustada."
+elif grep -q 'api|auth|admin|daemon' "$PANEL/routes/base.php"; then
+  sed -i 's#api|auth|admin|daemon#api|auth|admin|daemon|pterobackups#g' "$PANEL/routes/base.php"
+  echo "    OK: ruta comodín de React ajustada para dejar pasar /pterobackups."
+else
+  echo "    AVISO: no se encontró la ruta comodín de React en routes/base.php."
+  echo "           Si /pterobackups/server/... da error 404, avísame."
+fi
+
 # 3) Inyectar los scripts del menú (área de usuario y área admin).
 #    El script CLONA un botón del tema activo, así funciona con el panel
 #    normal y con temas como Arix.

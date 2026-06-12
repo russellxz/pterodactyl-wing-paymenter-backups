@@ -4,6 +4,14 @@
     <strong id="job-name">Tarea</strong>
     <span class="job-msg" id="job-msg"></span>
     <span class="job-count" id="job-count"></span>
+    <% if (can('run_backups')) { %>
+    <button class="btn btn-sm btn-danger" id="job-cancel" type="button" onclick="cancelJob()"><i data-lucide="x-circle"></i>Cancelar</button>
+    <% } %>
   </div>
   <div class="progress"><div class="progress-bar" id="job-bar" style="width:0%"></div></div>
+</div>
+
+<div class="auto-chip" id="auto-chip" hidden>
+  <i data-lucide="timer"></i>
+  <span>Próxima copia automática en <b id="auto-countdown">—</b></span>
 </div>

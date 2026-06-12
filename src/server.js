@@ -53,6 +53,14 @@ app.use((req, res, next) => {
     const a = req.session.admin;
     return !!a && (a.is_root === 1 || (a.permissions || []).includes(perm));
   };
+  // Tamaños legibles: B, KB, MB o GB según corresponda
+  res.locals.fmtSize = (bytes) => {
+    const b = Number(bytes) || 0;
+    if (b < 1024) return `${b} B`;
+    if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
+    return `${(b / 1073741824).toFixed(2)} GB`;
+  };
   next();
 });
 

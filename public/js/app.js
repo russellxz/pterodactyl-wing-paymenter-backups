@@ -1,26 +1,28 @@
-// public/js/app.js - Lógica del navegador: iconos, progreso en tiempo real,
-// buscador, confirmaciones y botones de "Probar conexión".
+// public/js/app.js - Lógica del navegador: iconos, progreso en tiempo real
+// (persistente aunque recargues), cancelación, contador de la próxima copia
+// automática, buscador, confirmaciones y pruebas de conexión.
 (function () {
   'use strict';
 
-  // Iconos (Lucide)
   if (window.lucide) lucide.createIcons();
 
+  function el(id) { return document.getElementById(id); }
+
   // -------------------------------------------------------------------------
-  // Progreso y logs en tiempo real (Socket.IO)
+  // Progreso de la tarea actual
   // -------------------------------------------------------------------------
   function renderJob(job) {
-    var card = document.getElementById('job-card');
+    var card = el('job-card');
     if (!card) return;
     if (!job || !job.active) {
       card.hidden = true;
       return;
     }
     card.hidden = false;
-    document.getElementById('job-name').textContent = job.name || 'Tarea';
-    document.getElementById('job-msg').textContent = job.message || '';
-    var count = document.getElementById('job-count');
-    var bar = document.getElementById('job-bar');
+    el('job-name').textContent = job.name || 'Tarea';
+    el('job-msg').textContent = job.message || '';
+    var count = el('job-count');
+    var bar = el('job-bar');
     if (job.total > 0) {
       count.textContent = job.current + ' / ' + job.total;
       bar.style.width = Math.min(100, Math.round((job.current / job.total) * 100)) + '%';
@@ -28,10 +30,82 @@
       count.textContent = '';
       bar.style.width = '12%';
     }
+    var cancelBtn = el('job-cancel');
+    if (cancelBtn) {
+      cancelBtn.disabled = !!job.cancelRequested;
+      if (job.cancelRequested) cancelBtn.textContent = 'Cancelando...';
+    }
   }
 
+  window.cancelJob = function () {
+    if (!window.confirm('¿Cancelar la tarea en curso? Se detendrá al terminar el servidor actual.')) return;
+    fetch('/api/job/cancel', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (!d.ok) window.alert(d.message); })
+      .catch(function () {});
+  };
+
+  // -------------------------------------------------------------------------
+  // Contador en tiempo real de la próxima copia automática
+  // -------------------------------------------------------------------------
+  var nextRun = null;
+  var serverOffset = 0; // diferencia entre el reloj del servidor y el del navegador
+
+  function fmtDur(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var d = Math.floor(s / 86400); s -= d * 86400;
+    var h = Math.floor(s / 3600); s -= h * 3600;
+    var m = Math.floor(s / 60); s -= m * 60;
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return (d ? d + 'd ' : '') + pad(h) + 'h ' + pad(m) + 'm ' + pad(s) + 's';
+  }
+
+  function updateCountdown() {
+    var chip = el('auto-chip');
+    if (!chip) return;
+    if (!nextRun) { chip.hidden = true; return; }
+    chip.hidden = false;
+    el('auto-countdown').textContent = fmtDur(nextRun - (Date.now() + serverOffset));
+  }
+  setInterval(updateCountdown, 1000);
+
+  // -------------------------------------------------------------------------
+  // Estado desde el servidor: al cargar, por socket y por sondeo cada 5 s
+  // (así el progreso NO desaparece aunque recargues la página)
+  // -------------------------------------------------------------------------
+  function applyState(data) {
+    if (!data) return;
+    renderJob(data);
+    nextRun = data.next_run || null;
+    if (data.server_now) serverOffset = data.server_now - Date.now();
+    updateCountdown();
+  }
+
+  function fetchState() {
+    fetch('/api/job')
+      .then(function (r) { return r.json(); })
+      .then(applyState)
+      .catch(function () {});
+  }
+
+  if (el('job-card')) {
+    fetchState();
+    setInterval(fetchState, 5000);
+  }
+
+  if (window.io) {
+    try {
+      var socket = io();
+      socket.on('progress', renderJob);
+      socket.on('log', addLogLine);
+    } catch (e) { /* sin tiempo real, la página sigue funcionando */ }
+  }
+
+  // -------------------------------------------------------------------------
+  // Logs en vivo
+  // -------------------------------------------------------------------------
   function addLogLine(l) {
-    var box = document.getElementById('logbox');
+    var box = el('logbox');
     if (!box) return;
     var empty = box.querySelector('.empty');
     if (empty) empty.remove();
@@ -44,35 +118,18 @@
     box.insertBefore(div, box.firstChild);
   }
 
-  if (window.io) {
-    try {
-      var socket = io();
-      socket.on('progress', renderJob);
-      socket.on('log', addLogLine);
-    } catch (e) { /* sin tiempo real, la página sigue funcionando */ }
-  }
-
-  // Al cargar la página, pregunta si hay una tarea en marcha
-  if (document.getElementById('job-card')) {
-    fetch('/api/job')
-      .then(function (r) { return r.json(); })
-      .then(renderJob)
-      .catch(function () {});
-  }
-
   // -------------------------------------------------------------------------
-  // Buscador en tiempo real de la tabla de copias
+  // Buscador en tiempo real de tablas de copias
   // -------------------------------------------------------------------------
   window.filterTable = function () {
-    var q = (document.getElementById('search').value || '').toLowerCase().trim();
+    var q = (el('search').value || '').toLowerCase().trim();
     document.querySelectorAll('#backups-table tbody tr').forEach(function (tr) {
       tr.style.display = !q || (tr.dataset.search || '').indexOf(q) !== -1 ? '' : 'none';
     });
   };
 
   // -------------------------------------------------------------------------
-  // Confirmaciones en formularios peligrosos (data-confirm)
-  // y pregunta extra para restauraciones (data-wipe-ask)
+  // Confirmaciones (data-confirm) y pregunta extra de vaciado (data-wipe-ask)
   // -------------------------------------------------------------------------
   document.addEventListener('submit', function (ev) {
     var form = ev.target;
@@ -90,12 +147,12 @@
   });
 
   // -------------------------------------------------------------------------
-  // Botones "Probar conexión" (nodos y panel)
+  // Botones "Probar conexión" (nodos y paneles)
   // -------------------------------------------------------------------------
   window.testConnection = function (url, btn) {
     var original = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Probando...';
+    btn.innerHTML = '<span class="spinner"></span>';
     fetch(url, { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -112,17 +169,21 @@
   };
 
   // -------------------------------------------------------------------------
-  // Modal de restauración de la BD del panel
+  // Modales
   // -------------------------------------------------------------------------
+  window.openDialog = function (id) {
+    var dlg = el(id);
+    if (dlg) dlg.showModal();
+  };
+
   window.openPanelRestore = function (backupId) {
-    var dlg = document.getElementById('panel-restore');
+    var dlg = el('panel-restore');
     if (!dlg) return;
-    var sel = document.getElementById('panel-backup-select');
+    var sel = el('panel-backup-select');
     if (sel && backupId) sel.value = String(backupId);
     dlg.showModal();
   };
 
-  // Cerrar el modal al hacer clic fuera
   document.querySelectorAll('dialog.modal').forEach(function (dlg) {
     dlg.addEventListener('click', function (ev) {
       if (ev.target === dlg) dlg.close();

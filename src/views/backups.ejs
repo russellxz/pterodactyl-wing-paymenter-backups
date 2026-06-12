@@ -2,67 +2,72 @@
 
 <header class="page-head">
   <h1>Copias de seguridad</h1>
-  <p>Busca, descarga, restaura o elimina las copias guardadas.</p>
+  <p>Las copias de los nodos están organizadas por fechas dentro de cada nodo. Las de la base de datos de los paneles van por separado.</p>
 </header>
 
-<%- include('partials/job') %>
+<% if (can('run_backups')) { %>
+<section class="card">
+  <h2><i data-lucide="zap"></i>Copia manual</h2>
+  <form method="post" action="/backups/run" class="form-inline">
+    <select name="target" onchange="document.getElementById('node-pick').hidden = this.value !== 'node'">
+      <option value="both">Todo (nodos + BD de paneles)</option>
+      <option value="nodes">Solo nodos (archivos de servidores)</option>
+      <option value="panel">Solo BD de los paneles</option>
+      <% if (nodes.length) { %><option value="node">Un nodo específico</option><% } %>
+    </select>
+    <select name="node_id" id="node-pick" hidden>
+      <% nodes.forEach(n => { %><option value="<%= n.id %>"><%= n.name %></option><% }) %>
+    </select>
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia ahora</button>
+  </form>
+</section>
+<% } %>
 
 <section class="card">
-  <div class="toolbar">
-    <div class="search">
-      <i data-lucide="search"></i>
-      <input id="search" type="search" placeholder="Buscar por nombre, correo o servidor..." oninput="filterTable()">
-    </div>
-    <div class="toolbar-actions">
-      <% if (can('run_backups')) { %>
-      <form method="post" action="/backups/run" class="inline">
-        <input type="hidden" name="target" value="both">
-        <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia ahora</button>
-      </form>
-      <% } %>
-      <% if (can('restore_backups') && rows.length) { %>
-      <form method="post" action="/restore-all" class="inline" data-confirm="Esto restaurará la copia MÁS RECIENTE de CADA servidor a sus nodos. ¿Continuar?" data-wipe-ask="1">
-        <input type="hidden" name="wipe" value="0">
-        <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar todo</button>
-      </form>
-      <% } %>
-      <% if (can('restore_backups') && panelBackups.length) { %>
-      <button class="btn" type="button" onclick="document.getElementById('panel-restore').showModal()"><i data-lucide="database"></i>Restaurar BD del panel</button>
-      <% } %>
-    </div>
+  <h2><i data-lucide="server"></i>Copias por nodo</h2>
+  <p class="muted small">Pulsa un nodo para ver sus fechas de copia y, dentro de cada fecha, todos los servidores guardados.</p>
+  <% if (nodes.length) { %>
+  <div class="node-grid">
+    <% nodes.forEach(n => { %>
+    <a class="node-card" href="/nodes/<%= n.id %>/backups">
+      <div class="node-card-head"><i data-lucide="server"></i><span><%= n.name %></span></div>
+      <div class="muted small"><%= n.host %></div>
+      <div class="node-card-stats">
+        <div><span class="muted small">Fechas de copia</span><b><%= n.snaps %></b></div>
+        <div><span class="muted small">Espacio</span><b><%= fmtSize(n.total_size) %></b></div>
+      </div>
+      <div class="muted small">Última: <b><%= n.last_snap || 'Nunca' %></b></div>
+      <span class="node-card-link">Ver copias <i data-lucide="arrow-right"></i></span>
+    </a>
+    <% }) %>
   </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay nodos. Agrégalos en <a href="/nodes">Nodos y Paneles</a>.</p>
+  <% } %>
+</section>
 
-  <% if (rows.length) { %>
+<section class="card">
+  <h2><i data-lucide="database"></i>Copias de la BD de los paneles</h2>
+  <p class="muted small">Estas copias van por separado: restaurar fechas de nodos nunca toca la base de datos del panel.</p>
+  <% if (panelBackups.length) { %>
   <div class="table-wrap">
-    <table id="backups-table">
-      <thead>
-        <tr><th>Tipo</th><th>Usuario</th><th>Correo</th><th>Servidor</th><th>Nodo</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr>
-      </thead>
+    <table>
+      <thead><tr><th>Panel</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr></thead>
       <tbody>
-        <% rows.forEach(b => { %>
-        <tr data-search="<%= (b.owner_name + ' ' + b.owner_email + ' ' + b.server_name + ' ' + b.filename).toLowerCase() %>">
-          <td><span class="badge <%= b.type === 'panel_db' ? 'badge-db' : 'badge-srv' %>"><i data-lucide="<%= b.type === 'panel_db' ? 'database' : 'box' %>"></i><%= b.type === 'panel_db' ? 'BD panel' : 'Servidor' %></span></td>
-          <td><%= b.owner_name %></td>
-          <td class="muted"><%= b.owner_email %></td>
-          <td><b><%= b.server_name %></b></td>
-          <td class="muted"><%= b.node_name || '—' %></td>
-          <td><%= (b.size / 1048576).toFixed(1) %> MB</td>
+        <% panelBackups.forEach(b => { %>
+        <tr>
+          <td><span class="badge badge-db"><i data-lucide="database"></i><%= b.panel_name || 'Panel eliminado' %></span></td>
+          <td><%= fmtSize(b.size) %></td>
           <td class="muted"><%= b.created_at %></td>
           <td class="row-actions">
             <% if (can('download_backups')) { %>
             <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
             <% } %>
-            <% if (can('restore_backups') && b.type === 'server') { %>
-            <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="¿Restaurar &quot;<%= b.server_name %>&quot; a su nodo? Los archivos de la copia sobrescribirán los actuales." data-wipe-ask="1">
-              <input type="hidden" name="wipe" value="0">
-              <button class="btn btn-sm" type="submit" title="Restaurar"><i data-lucide="history"></i></button>
-            </form>
-            <% } %>
-            <% if (can('restore_backups') && b.type === 'panel_db') { %>
+            <% if (can('restore_backups')) { %>
             <button class="btn btn-sm" type="button" title="Restaurar BD" onclick="openPanelRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
             <% } %>
             <% if (can('delete_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar esta copia? No se puede deshacer.">
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar esta copia de la base de datos? No se puede deshacer.">
               <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
@@ -73,21 +78,22 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias. Configura tus nodos y usa "Hacer copia ahora".</p>
+  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias de bases de datos.</p>
   <% } %>
 </section>
 
+<% if (can('restore_backups') && panelBackups.length) { %>
 <dialog id="panel-restore" class="modal">
   <form method="post" action="/restore-panel" class="form">
-    <h2><i data-lucide="database"></i>Restaurar base de datos del panel</h2>
+    <h2><i data-lucide="database"></i>Restaurar base de datos de un panel</h2>
     <label>Copia a restaurar
       <select name="backup_id" id="panel-backup-select">
-        <% panelBackups.forEach(b => { %><option value="<%= b.id %>"><%= b.filename %> (<%= b.created_at %>)</option><% }) %>
+        <% panelBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.panel_name || 'Panel eliminado') %> — <%= b.created_at %></option><% }) %>
       </select>
     </label>
     <label>Destino
       <select name="mode" onchange="document.getElementById('custom-target').hidden = this.value !== 'custom'">
-        <option value="saved">El mismo panel configurado</option>
+        <option value="saved">El panel de esta copia (configuración guardada)</option>
         <option value="custom">Otro VPS (panel nuevo)</option>
       </select>
     </label>
@@ -100,12 +106,13 @@
       <label>Contraseña de la BD<input name="db_password" type="password"></label>
       <label>Nombre de la BD<input name="db_name" value="panel"></label>
     </div>
-    <p class="muted small">El panel nuevo debe tener Pterodactyl ya instalado (con su base de datos creada). El .zip incluye también el archivo <code>.env</code> original por si necesitas copiarlo a <code>/var/www/pterodactyl/.env</code>.</p>
+    <p class="muted small">El panel destino debe tener Pterodactyl ya instalado (con su base de datos creada). El .zip incluye también el archivo <code>.env</code> original por si necesitas copiarlo a <code>/var/www/pterodactyl/.env</code>.</p>
     <div class="form-actions">
       <button class="btn" type="button" onclick="document.getElementById('panel-restore').close()">Cancelar</button>
       <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar base de datos</button>
     </div>
   </form>
 </dialog>
+<% } %>
 
 <%- include('partials/foot') %>

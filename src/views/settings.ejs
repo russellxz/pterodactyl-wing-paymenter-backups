@@ -20,9 +20,9 @@
 
     <label><i data-lucide="target"></i>Qué se copia automáticamente
       <select name="backup_target">
-        <option value="both" <%= backupTarget == 'both' ? 'selected' : '' %>>Todo (nodos + BD del panel)</option>
+        <option value="both" <%= backupTarget == 'both' ? 'selected' : '' %>>Todo (nodos + BD de paneles)</option>
         <option value="nodes" <%= backupTarget == 'nodes' ? 'selected' : '' %>>Solo nodos (archivos de servidores)</option>
-        <option value="panel" <%= backupTarget == 'panel' ? 'selected' : '' %>>Solo base de datos del panel</option>
+        <option value="panel" <%= backupTarget == 'panel' ? 'selected' : '' %>>Solo BD de los paneles</option>
       </select>
     </label>
 

@@ -37,21 +37,31 @@ if ! grep -q 'PteroBackups START' "$PANEL/routes/admin.php"; then
   echo "    Rutas de admin agregadas a routes/admin.php"
 fi
 
-# 3) Botón "Copias Remotas" en el menú de cada servidor (área de usuario).
-#    Se inyecta con un script que CLONA el botón del tema activo:
-#    funciona con el panel normal y con temas como Arix.
-W="$PANEL/resources/views/templates/wrapper.blade.php"
-if [ -f "$W" ] && ! grep -q 'pterobackups/inject.js' "$W"; then
-  sed -i 's#</body>#    <script src="/pterobackups/inject.js" defer></script>\n    </body>#' "$W"
-  echo "    Menú de usuario inyectado (wrapper.blade.php)."
-fi
+# 3) Inyectar los scripts del menú (área de usuario y área admin).
+#    El script CLONA un botón del tema activo, así funciona con el panel
+#    normal y con temas como Arix.
+inject_script() {
+  FILE="$1"; SRC="$2"
+  if [ ! -f "$FILE" ]; then
+    echo "    AVISO: no existe $FILE (¿ruta del panel correcta?)"
+    return
+  fi
+  if ! grep -q "$SRC" "$FILE"; then
+    if grep -q '</body>' "$FILE"; then
+      sed -i "s#</body>#    <script src=\"$SRC\" defer></script>\n    </body>#" "$FILE"
+    else
+      printf '\n<script src="%s" defer></script>\n' "$SRC" >> "$FILE"
+    fi
+  fi
+  if grep -q "$SRC" "$FILE"; then
+    echo "    OK: $SRC inyectado en $(basename "$FILE")"
+  else
+    echo "    AVISO: no se pudo inyectar $SRC en $FILE"
+  fi
+}
 
-# 4) Enlace "PteroBackups" en el menú del área admin
-A="$PANEL/resources/views/layouts/admin.blade.php"
-if [ -f "$A" ] && ! grep -q 'pterobackups/admin-inject.js' "$A"; then
-  sed -i 's#</body>#    <script src="/pterobackups/admin-inject.js" defer></script>\n    </body>#' "$A"
-  echo "    Menú de admin inyectado (layouts/admin.blade.php)."
-fi
+inject_script "$PANEL/resources/views/templates/wrapper.blade.php" "/pterobackups/inject.js"
+inject_script "$PANEL/resources/views/layouts/admin.blade.php" "/pterobackups/admin-inject.js"
 
 # 5) Limpiar cachés del panel y ajustar permisos
 cd "$PANEL"
@@ -72,5 +82,5 @@ echo "  2. Pega la URL del sistema de copias y la clave de API."
 echo "     Ambos están en el sistema: Configuración -> Extensión del panel."
 echo "  3. Guarda: la conexión se prueba automáticamente."
 echo ""
-echo " Los usuarios verán 'Copias Remotas' en el menú de su servidor."
+echo " Los usuarios verán 'Backup 2.0' en el menú de su servidor."
 echo "=========================================================="

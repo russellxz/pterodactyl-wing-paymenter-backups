@@ -18,7 +18,7 @@ Todo se maneja desde una página web con diseño oscuro, iconos profesionales, p
 - **Progreso en tiempo real** y página de **logs** en vivo.
 - Contraseñas SSH y de BD guardadas **cifradas** (AES-256) en una base de datos local SQLite (no hay que instalar ninguna base de datos: se crea sola en un archivo).
 
-> La **extensión para el panel de Pterodactyl** está incluida en la carpeta [`extension/`](extension/): los admins gestionan todas las copias desde el área admin del panel y cada usuario ve, descarga y restaura las copias de SU servidor desde una nueva opción "Copias Remotas" en su menú. **Compatible con el tema Arix v2** (no recompila el panel). Instrucciones completas en [`extension/README.md`](extension/README.md).
+> La **extensión para el panel de Pterodactyl** está incluida en la carpeta [`extension/`](extension/): los admins gestionan todas las copias desde el área admin del panel y cada usuario ve, descarga y restaura las copias de SU servidor desde una nueva opción "Backup 2.0" en su menú. **Compatible con el tema Arix v2** (no recompila el panel). Instrucciones completas en [`extension/README.md`](extension/README.md).
 
 ---
 

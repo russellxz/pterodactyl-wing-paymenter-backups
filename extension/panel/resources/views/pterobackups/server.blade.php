@@ -3,14 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Copias Remotas · {{ $server->name }}</title>
+    <title>Backup 2.0 · {{ $server->name }}</title>
     <link rel="stylesheet" href="/pterobackups/pb.css">
 </head>
 <body>
 <div class="pb-wrap">
     <header class="pb-head">
         <div>
-            <h1>Copias Remotas</h1>
+            <h1>Backup 2.0</h1>
             <p class="pb-muted">Servidor: <b>{{ $server->name }}</b></p>
         </div>
         <a class="pb-btn" href="/server/{{ $short }}">&larr; Volver al servidor</a>
@@ -33,7 +33,7 @@
     </div>
 
     <div class="pb-card">
-        <h2>Copias disponibles de tu servidor</h2>
+        <h2>Backup 2.0 · Copias disponibles de tu servidor</h2>
         <p class="pb-muted pb-small">Puedes descargar cualquier copia o restaurarla a tu servidor. Al restaurar, te preguntaremos si quieres vaciar los archivos actuales antes.</p>
         <div id="pb-list"><p class="pb-muted">Cargando copias...</p></div>
     </div>

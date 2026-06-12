@@ -16,7 +16,10 @@ class ServerBackupsController extends Controller
 {
     protected function findServer(Request $request, string $short)
     {
-        $server = DB::table('servers')->where('uuidShort', $short)->first();
+        $server = DB::table('servers')
+            ->where('uuidShort', $short)
+            ->orWhere('uuid', $short)
+            ->first();
         abort_unless($server, 404);
 
         $user = $request->user();

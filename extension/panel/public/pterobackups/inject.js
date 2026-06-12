@@ -7,14 +7,25 @@
 (function () {
   'use strict';
 
+  console.info('[PteroBackups] inject.js cargado correctamente.');
+
   var LABEL = 'Backup 2.0';
-  var FLOAT_DELAY = 6000;
+  var FLOAT_DELAY = 2500;
   var startedAt = Date.now();
   var announced = false;
 
   function currentShort() {
-    var m = window.location.pathname.match(/^\/server\/([a-zA-Z0-9]{8})/);
-    return m ? m[1] : null;
+    var m = window.location.pathname.match(/\/server\/([a-zA-Z0-9-]{4,40})(\/|$)/);
+    if (m) return m[1];
+    // Respaldo: deducirlo de los enlaces del menu de la pagina
+    if (window.location.pathname.indexOf('/server') !== -1) {
+      var links = document.querySelectorAll('a[href*="/server/"]');
+      for (var i = 0; i < links.length; i++) {
+        var mm = (links[i].getAttribute('href') || '').match(/\/server\/([a-zA-Z0-9-]{4,40})(\/|$)/);
+        if (mm) return mm[1];
+      }
+    }
+    return null;
   }
 
   function targetUrl(short) {

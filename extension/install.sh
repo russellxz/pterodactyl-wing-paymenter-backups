@@ -40,21 +40,24 @@ fi
 # 3) Inyectar los scripts del menú (área de usuario y área admin).
 #    El script CLONA un botón del tema activo, así funciona con el panel
 #    normal y con temas como Arix.
+VERSION_TAG="$(date +%s)"
 inject_script() {
   FILE="$1"; SRC="$2"
   if [ ! -f "$FILE" ]; then
     echo "    AVISO: no existe $FILE (¿ruta del panel correcta?)"
     return
   fi
-  if ! grep -q "$SRC" "$FILE"; then
-    if grep -q '</body>' "$FILE"; then
-      sed -i "s#</body>#    <script src=\"$SRC\" defer></script>\n    </body>#" "$FILE"
-    else
-      printf '\n<script src="%s" defer></script>\n' "$SRC" >> "$FILE"
-    fi
+  # Quitar inyecciones anteriores para refrescar la versión (evita la caché
+  # de Cloudflare y del navegador, que guardan el .js viejo durante horas)
+  sed -i "\\#${SRC}#d" "$FILE"
+  TAG="<script src=\"${SRC}?v=${VERSION_TAG}\" defer></script>"
+  if grep -q '</body>' "$FILE"; then
+    sed -i "s#</body>#    ${TAG}\n    </body>#" "$FILE"
+  else
+    printf '\n%s\n' "$TAG" >> "$FILE"
   fi
   if grep -q "$SRC" "$FILE"; then
-    echo "    OK: $SRC inyectado en $(basename "$FILE")"
+    echo "    OK: ${SRC}?v=${VERSION_TAG} inyectado en $(basename "$FILE")"
   else
     echo "    AVISO: no se pudo inyectar $SRC en $FILE"
   fi

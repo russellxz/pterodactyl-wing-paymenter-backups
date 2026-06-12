@@ -1,0 +1,20 @@
+
+// PteroBackups START (gestionado por extension/install.sh - no editar a mano)
+Route::group(['prefix' => 'pterobackups'], function () {
+    Route::get('/', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'index'])->name('admin.pterobackups');
+    Route::post('/settings', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'saveSettings'])->name('admin.pterobackups.settings');
+    Route::get('/download/{backup}', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'download']);
+    Route::get('/api/overview', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'overview']);
+    Route::get('/api/job', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'job']);
+    Route::post('/api/cancel', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'cancel']);
+    Route::post('/api/run', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'run']);
+    Route::get('/api/nodes/{node}/snapshots', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'nodeSnapshots']);
+    Route::get('/api/snapshots/{snapshot}', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'snapshot']);
+    Route::post('/api/snapshots/{snapshot}/restore', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'snapshotRestore']);
+    Route::post('/api/snapshots/{snapshot}/delete', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'snapshotDelete']);
+    Route::post('/api/backups/{backup}/restore', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'backupRestore']);
+    Route::post('/api/backups/{backup}/delete', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'backupDelete']);
+    Route::get('/api/schedule', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'schedule']);
+    Route::post('/api/schedule', [\Pterodactyl\Http\Controllers\PteroBackups\AdminController::class, 'scheduleSave']);
+});
+// PteroBackups END

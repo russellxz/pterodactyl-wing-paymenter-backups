@@ -387,7 +387,17 @@ router.get('/settings', requirePerm('manage_settings'), (req, res) => {
     scheduleHours: getSetting('schedule_hours', '0'),
     retentionHours: getSetting('retention_hours', '0'),
     backupTarget: getSetting('backup_target', 'both'),
+    extApiKey: getSetting('ext_api_key', ''),
+    extUrl: `${req.protocol}://${req.get('host')}`,
   });
+});
+
+// Regenerar la clave de API de la extensión del panel
+router.post('/settings/regen-key', requirePerm('manage_settings'), (req, res) => {
+  const extapi = require('./extapi');
+  extapi.regenerateKey();
+  logger.warn(`Clave de API de la extensión regenerada por ${req.session.admin.email}. Hay que actualizarla en el panel.`);
+  go(res, '/settings', 'Clave nueva generada. Recuerda pegarla también en el panel (/admin/pterobackups).');
 });
 
 router.post('/settings', requirePerm('manage_settings'), (req, res) => {

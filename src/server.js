@@ -44,6 +44,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// API para la extensión del panel (autenticación propia por clave)
+const extapi = require('./extapi');
+app.use('/api/ext', extapi.router);
+extapi.ensureKey();
+
 // Variables disponibles en todas las vistas
 app.use((req, res, next) => {
   res.locals.admin = req.session.admin || null;

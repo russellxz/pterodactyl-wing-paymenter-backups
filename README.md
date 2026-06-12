@@ -18,7 +18,7 @@ Todo se maneja desde una página web con diseño oscuro, iconos profesionales, p
 - **Progreso en tiempo real** y página de **logs** en vivo.
 - Contraseñas SSH y de BD guardadas **cifradas** (AES-256) en una base de datos local SQLite (no hay que instalar ninguna base de datos: se crea sola en un archivo).
 
-> La **extensión para el panel de Pterodactyl** (compatible con el tema Arix v2.0.8) es la **fase 2** y se desarrollará una vez probada la página.
+> La **extensión para el panel de Pterodactyl** está incluida en la carpeta [`extension/`](extension/): los admins gestionan todas las copias desde el área admin del panel y cada usuario ve, descarga y restaura las copias de SU servidor desde una nueva opción "Copias Remotas" en su menú. **Compatible con el tema Arix v2** (no recompila el panel). Instrucciones completas en [`extension/README.md`](extension/README.md).
 
 ---
 
@@ -307,8 +307,8 @@ git push
 
 ## Hoja de ruta
 
-- [x] Fase 1: página web del sistema de copias (este repositorio).
-- [ ] Fase 2: extensión para el panel de Pterodactyl (gestión desde el área admin, copias visibles para cada usuario, compatible con el tema Arix v2.0.8).
+- [x] Fase 1: página web del sistema de copias.
+- [x] Fase 2: extensión para el panel de Pterodactyl (carpeta `extension/`): gestión completa desde el área admin, copias visibles/descargables/restaurables por cada usuario en su servidor, compatible con el tema Arix v2.
 
 ## Licencia
 

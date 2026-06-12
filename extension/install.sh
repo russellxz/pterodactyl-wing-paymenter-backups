@@ -63,6 +63,14 @@ inject_script() {
 inject_script "$PANEL/resources/views/templates/wrapper.blade.php" "/pterobackups/inject.js"
 inject_script "$PANEL/resources/views/layouts/admin.blade.php" "/pterobackups/admin-inject.js"
 
+# Refuerzo para temas como Arix: su wrapper incluye layouts/scripts.blade.php,
+# así el botón sobrevive aunque el tema reemplace el wrapper al actualizarse.
+S="$PANEL/resources/views/layouts/scripts.blade.php"
+if [ -f "$S" ] && ! grep -q 'pterobackups/inject.js' "$S"; then
+  printf '\n<script src="/pterobackups/inject.js" defer></script>\n' >> "$S"
+  echo "    OK: refuerzo añadido en layouts/scripts.blade.php"
+fi
+
 # 5) Limpiar cachés del panel y ajustar permisos
 cd "$PANEL"
 php artisan view:clear   >/dev/null 2>&1 || true

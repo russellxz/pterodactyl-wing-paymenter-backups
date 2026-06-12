@@ -64,3 +64,7 @@ sudo bash uninstall.sh
 
 - Solo el **dueño** del servidor (o un admin) puede ver y restaurar las copias de ese servidor; el sistema rechaza cualquier intento de tocar copias de otros servidores.
 - Las descargas pasan por el panel (streaming), así que la clave de API nunca llega al navegador del usuario.
+
+## Importante si usas el tema Arix
+
+Arix reemplaza el archivo `wrapper.blade.php` del panel cuando se instala o se actualiza, y eso borra el script del botón. **Después de instalar o actualizar Arix, vuelve a ejecutar `sudo bash install.sh`** (tarda segundos y no daña nada). Además, si el tema redibuja el menú y no deja poner el botón, la extensión muestra un **botón flotante "Backup 2.0"** abajo a la derecha en las páginas del servidor, para que los usuarios siempre tengan acceso.

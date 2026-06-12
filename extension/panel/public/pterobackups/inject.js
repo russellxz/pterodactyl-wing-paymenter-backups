@@ -1,13 +1,14 @@
-// PteroBackups - inject.js
-// Añade la opción "Backup 2.0" al menú lateral de cada servidor SIN
-// recompilar el panel: busca el botón "Files" del menú y lo CLONA, así copia
-// exactamente el diseño del tema activo (panel normal, Arix v2, etc.).
+// PteroBackups - inject.js (v3)
+// Añade "Backup 2.0" al menú lateral de cada servidor SIN recompilar el panel.
+// 1) Intenta CLONAR el botón "Files" del tema activo (panel normal, Arix...).
+// 2) Si el tema no lo permite, muestra un botón flotante abajo a la derecha.
 (function () {
   'use strict';
 
   var LABEL = 'Backup 2.0';
   var announced = false;
-  var warnTimer = null;
+  var serverSince = 0;
+  var lastShort = null;
 
   function currentShort() {
     var m = window.location.pathname.match(/^\/server\/([a-zA-Z0-9]{8})/);
@@ -19,32 +20,26 @@
   }
 
   function setLabel(root) {
-    var replaced = false;
-    var els = root.querySelectorAll('span, p, div, strong, b, a');
-    for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      if (el.children.length === 0 && el.textContent.trim()) {
-        el.textContent = LABEL;
-        replaced = true;
-        break;
-      }
-    }
-    if (!replaced) {
-      var walker = root.childNodes;
-      for (var j = 0; j < walker.length; j++) {
-        var n = walker[j];
-        if (n.nodeType === 3 && n.textContent.trim()) {
-          n.textContent = ' ' + LABEL;
-          replaced = true;
-          break;
+    try {
+      var els = root.querySelectorAll('span, p, div, strong, b');
+      for (var i = 0; i < els.length; i++) {
+        if (els[i].children.length === 0 && els[i].textContent.trim()) {
+          els[i].textContent = LABEL;
+          return;
         }
       }
-    }
-    if (!replaced) root.textContent = LABEL;
+      var kids = root.childNodes;
+      for (var j = 0; j < kids.length; j++) {
+        if (kids[j].nodeType === 3 && kids[j].textContent.trim()) {
+          kids[j].textContent = ' ' + LABEL;
+          return;
+        }
+      }
+      root.appendChild(document.createTextNode(' ' + LABEL));
+    } catch (e) { /* nada */ }
   }
 
-  // Busca el elemento del menú a clonar. Primero por enlace (panel normal),
-  // después por el TEXTO visible (temas como Arix que arman el menú distinto).
+  // Busca el elemento del menú a clonar: primero por enlace, luego por texto.
   function findMenuItem(short) {
     var selectors = [
       'a[href$="/server/' + short + '/files"]',
@@ -57,7 +52,7 @@
       if (a) return a;
     }
     var texts = ['files', 'archivos', 'file manager', 'gestor de archivos'];
-    var nodes = document.querySelectorAll('a, button, [role="link"], [role="button"], li');
+    var nodes = document.querySelectorAll('a, button, [role="link"], [role="button"]');
     for (var j = 0; j < nodes.length; j++) {
       var t = (nodes[j].textContent || '').trim().toLowerCase();
       if (t && texts.indexOf(t) !== -1) return nodes[j];
@@ -66,74 +61,109 @@
   }
 
   function cleanActive(el) {
-    if (el.className && typeof el.className === 'string') {
-      el.className = el.className.replace(/\bactive\b/g, '').trim();
-    }
-    el.removeAttribute && el.removeAttribute('aria-current');
+    try {
+      if (el.className && typeof el.className === 'string') {
+        el.className = el.className.replace(/\bactive\b/g, '').trim();
+      }
+      if (el.removeAttribute) el.removeAttribute('aria-current');
+    } catch (e) { /* nada */ }
   }
 
-  function inject() {
-    var short = currentShort();
+  function injectMenu(short) {
     var existing = document.getElementById('pb-nav-item');
-
-    // Fuera de la vista de un servidor: quitar el botón si quedó de antes
-    if (!short) {
-      if (existing) existing.remove();
-      return;
-    }
-
-    // Ya existe: solo asegurar que apunta al servidor actual
     if (existing) {
       var link = existing.tagName === 'A' ? existing : existing.querySelector('a');
       if (link) link.setAttribute('href', targetUrl(short));
-      return;
+      return true;
     }
 
     var found = findMenuItem(short);
-    if (!found) {
-      if (!warnTimer) {
-        warnTimer = setTimeout(function () {
-          if (!document.getElementById('pb-nav-item')) {
-            console.warn('[PteroBackups] No se encontró el menú del servidor para añadir "' + LABEL + '".');
-          }
-        }, 8000);
+    if (!found) return false;
+
+    try {
+      var base = found.closest('li') || found;
+      var clone = base.cloneNode(true);
+      clone.id = 'pb-nav-item';
+      cleanActive(clone);
+
+      var a = clone.tagName === 'A' ? clone : clone.querySelector('a');
+      if (a) {
+        a.setAttribute('href', targetUrl(short));
+        cleanActive(a);
       }
-      return;
-    }
 
-    var base = found.closest('li') || found;
-    var clone = base.cloneNode(true);
-    clone.id = 'pb-nav-item';
-    cleanActive(clone);
+      setLabel(clone);
 
-    var a = clone.tagName === 'A' ? clone : clone.querySelector('a');
-    if (a) {
-      a.setAttribute('href', targetUrl(short));
-      cleanActive(a);
-    }
+      // Navegación garantizada aunque el tema use botones de React
+      clone.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        window.location.href = targetUrl(currentShort() || short);
+      }, true);
 
-    setLabel(clone);
-
-    // Navegación garantizada aunque el tema use botones de React sin enlace
-    clone.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      window.location.href = targetUrl(currentShort() || short);
-    }, true);
-
-    base.parentNode.insertBefore(clone, base.nextSibling);
-    if (!announced) {
-      announced = true;
-      console.info('[PteroBackups] Botón "' + LABEL + '" añadido al menú del servidor.');
+      base.parentNode.insertBefore(clone, base.nextSibling);
+      if (!announced) {
+        announced = true;
+        console.info('[PteroBackups] Botón "' + LABEL + '" añadido al menú del servidor.');
+      }
+      return true;
+    } catch (e) {
+      console.warn('[PteroBackups] No se pudo clonar el menú: ' + e.message);
+      return false;
     }
   }
 
-  // El panel (y Arix) renderizan el menú con React de forma asíncrona y al
-  // navegar no recargan la página: vigilamos los cambios del DOM.
+  // Botón flotante de respaldo: aparece si en ~3 segundos no se pudo poner
+  // el botón en el menú (por ejemplo, con menús que lo quitan al redibujar).
+  function ensureFloat(short, menuOk) {
+    var f = document.getElementById('pb-float');
+    if (!short || menuOk) {
+      if (f) f.remove();
+      return;
+    }
+    if (Date.now() - serverSince < 3000) return;
+    if (f) {
+      f.setAttribute('href', targetUrl(short));
+      if (!f.isConnected && document.body) document.body.appendChild(f);
+      return;
+    }
+    f = document.createElement('a');
+    f.id = 'pb-float';
+    f.setAttribute('href', targetUrl(short));
+    f.textContent = LABEL;
+    f.setAttribute('style',
+      'position:fixed;right:18px;bottom:18px;z-index:999999;' +
+      'background:#0e1320;color:#ffb84d;border:1px solid #f0a33c;' +
+      'border-radius:999px;padding:10px 18px;font:600 14px system-ui,sans-serif;' +
+      'text-decoration:none;box-shadow:0 6px 18px rgba(0,0,0,0.45);cursor:pointer;');
+    document.body.appendChild(f);
+    console.info('[PteroBackups] Botón flotante "' + LABEL + '" mostrado.');
+  }
+
+  function tick() {
+    try {
+      var short = currentShort();
+      if (short !== lastShort) {
+        lastShort = short;
+        serverSince = Date.now();
+      }
+      if (!short) {
+        var item = document.getElementById('pb-nav-item');
+        if (item) item.remove();
+        var f = document.getElementById('pb-float');
+        if (f) f.remove();
+        return;
+      }
+      var menuOk = injectMenu(short);
+      ensureFloat(short, menuOk);
+    } catch (e) { /* nunca romper el panel */ }
+  }
+
+  console.info('[PteroBackups] inject.js cargado.');
   try {
-    var observer = new MutationObserver(function () { inject(); });
+    var observer = new MutationObserver(function () { tick(); });
     observer.observe(document.documentElement, { childList: true, subtree: true });
-  } catch (e) { /* sin observer, el intervalo lo cubre */ }
-  setInterval(inject, 1200);
-  inject();
+  } catch (e) { /* el intervalo lo cubre */ }
+  setInterval(tick, 1000);
+  tick();
 })();

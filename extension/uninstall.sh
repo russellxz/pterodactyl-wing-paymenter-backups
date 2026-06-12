@@ -16,9 +16,11 @@ echo "==> Desinstalando la extensión PteroBackups de: $PANEL"
 sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/base.php" 2>/dev/null || true
 sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/admin.php" 2>/dev/null || true
 
-# Quitar scripts inyectados
-sed -i '\#pterobackups/inject.js#d' "$PANEL/resources/views/templates/wrapper.blade.php" 2>/dev/null || true
-sed -i '\#pterobackups/admin-inject.js#d' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null || true
+# Quitar scripts inyectados (de cualquier plantilla donde estén)
+for FILE in $(grep -rl 'pterobackups/inject.js\|pterobackups/admin-inject.js' "$PANEL/resources/views" 2>/dev/null | grep -v 'views/pterobackups\|views/admin/pterobackups'); do
+  sed -i '\#pterobackups/inject.js#d' "$FILE" 2>/dev/null || true
+  sed -i '\#pterobackups/admin-inject.js#d' "$FILE" 2>/dev/null || true
+done
 sed -i "\\#pterobackups/inject.js#d" "$PANEL/resources/views/layouts/scripts.blade.php" 2>/dev/null || true
 
 # Quitar archivos

@@ -63,8 +63,27 @@ inject_script() {
   fi
 }
 
-inject_script "$PANEL/resources/views/templates/wrapper.blade.php" "/pterobackups/inject.js"
-inject_script "$PANEL/resources/views/layouts/admin.blade.php" "/pterobackups/admin-inject.js"
+ADMIN_LAYOUT="$PANEL/resources/views/layouts/admin.blade.php"
+
+# El script del área de usuario se inyecta en TODAS las plantillas de página
+# del panel (la normal y las que agregan temas como Arix), porque algunos
+# temas usan su propia plantilla en vez de wrapper.blade.php.
+USER_LAYOUTS="$(grep -rl '</body>' "$PANEL/resources/views" 2>/dev/null | grep -vi 'mail\|vendor\|partials\|pterobackups' || true)"
+FOUND_USER=0
+for FILE in $USER_LAYOUTS; do
+  if [ "$FILE" = "$ADMIN_LAYOUT" ]; then
+    inject_script "$FILE" "/pterobackups/admin-inject.js"
+  else
+    inject_script "$FILE" "/pterobackups/inject.js"
+    FOUND_USER=1
+  fi
+done
+if [ "$FOUND_USER" = "0" ] && [ -f "$PANEL/resources/views/templates/wrapper.blade.php" ]; then
+  inject_script "$PANEL/resources/views/templates/wrapper.blade.php" "/pterobackups/inject.js"
+fi
+if [ -f "$ADMIN_LAYOUT" ] && ! grep -q 'pterobackups/admin-inject.js' "$ADMIN_LAYOUT"; then
+  inject_script "$ADMIN_LAYOUT" "/pterobackups/admin-inject.js"
+fi
 
 # Refuerzo para temas como Arix: su wrapper incluye layouts/scripts.blade.php,
 # así el botón sobrevive aunque el tema reemplace el wrapper al actualizarse.

@@ -1,0 +1,57 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Copias del nodo: <%= node.name %></h1>
+  <p><%= node.host %> — Cada fila es una fecha de copia con todos los servidores guardados en esa pasada.</p>
+</header>
+
+<div class="toolbar">
+  <a class="btn" href="/backups"><i data-lucide="arrow-left"></i>Volver a Copias</a>
+  <% if (can('run_backups')) { %>
+  <form method="post" action="/backups/run" class="inline">
+    <input type="hidden" name="target" value="node">
+    <input type="hidden" name="node_id" value="<%= node.id %>">
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia de este nodo ahora</button>
+  </form>
+  <% } %>
+</div>
+
+<section class="card">
+  <h2><i data-lucide="calendar"></i>Fechas de copia</h2>
+  <% if (snapshots.length) { %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha</th><th>Estado</th><th>Servidores</th><th>Tamaño</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <% const ST = { running: ['En curso', 'badge-srv'], complete: ['Completa', 'badge-ok'], canceled: ['Cancelada', 'badge-db'], error: ['Error', 'badge-err'] }; %>
+        <% snapshots.forEach(s => { const st = ST[s.status] || [s.status, 'badge-srv']; %>
+        <tr>
+          <td><b><%= s.created_at %></b></td>
+          <td><span class="badge <%= st[1] %>"><%= st[0] %></span></td>
+          <td><%= s.cnt %></td>
+          <td><%= fmtSize(s.total_size) %></td>
+          <td class="row-actions">
+            <a class="btn btn-sm" href="/snapshots/<%= s.id %>" title="Ver los servidores de esta fecha"><i data-lucide="eye"></i>Ver copia</a>
+            <% if (can('restore_backups')) { %>
+            <form method="post" action="/snapshots/<%= s.id %>/restore" class="inline" data-confirm="¿Restaurar TODOS los servidores de la fecha <%= s.created_at %> al nodo? (La BD del panel NO se toca)." data-wipe-ask="1">
+              <input type="hidden" name="wipe" value="0">
+              <button class="btn btn-sm btn-warn" type="submit" title="Restaurar toda esta fecha"><i data-lucide="history"></i></button>
+            </form>
+            <% } %>
+            <% if (can('delete_backups')) { %>
+            <form method="post" action="/snapshots/<%= s.id %>/delete" class="inline" data-confirm="¿Eliminar la fecha <%= s.created_at %> con sus <%= s.cnt %> copias? No se puede deshacer.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar esta fecha"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Este nodo todavía no tiene fechas de copia. Usa "Hacer copia de este nodo ahora".</p>
+  <% } %>
+</section>
+
+<%- include('partials/foot') %>

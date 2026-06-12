@@ -259,6 +259,53 @@ tbody tr:last-child td { border-bottom: none; }
 .badge svg { width: 12px; height: 12px; }
 .badge-db { background: var(--accent-soft); color: var(--accent-strong); border: 1px solid rgba(240, 163, 60, 0.4); }
 .badge-srv { background: rgba(110, 168, 254, 0.12); color: #8fb8ff; border: 1px solid rgba(110, 168, 254, 0.35); }
+.badge-ok { background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(70, 198, 143, 0.4); }
+.badge-err { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(229, 101, 110, 0.4); }
+
+/* ----- Tarjetas de nodo (página Copias) ----- */
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+.node-card {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 15px 16px;
+  color: var(--text);
+}
+.node-card:hover { border-color: var(--accent); text-decoration: none; }
+.node-card-head {
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 600;
+}
+.node-card-head svg { color: var(--accent); }
+.node-card-stats { display: flex; gap: 22px; }
+.node-card-stats div { display: flex; flex-direction: column; }
+.node-card-stats b { font-family: var(--font-display); font-size: 17px; }
+.node-card-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--accent-strong); font-weight: 600; font-size: 13px;
+  margin-top: 2px;
+}
+
+/* ----- Chip del contador de la próxima copia automática ----- */
+.auto-chip {
+  display: inline-flex; align-items: center; gap: 9px;
+  background: var(--surface);
+  border: 1px solid rgba(240, 163, 60, 0.4);
+  border-radius: 99px;
+  padding: 7px 15px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.auto-chip svg { color: var(--accent); }
+.auto-chip b { color: var(--accent-strong); font-family: var(--font-display); }
 
 /* ----- Barra de herramientas y buscador ----- */
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }

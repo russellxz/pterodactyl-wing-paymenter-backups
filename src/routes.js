@@ -1,5 +1,6 @@
-// src/routes.js - Todas las rutas de la página: inicio de sesión, dashboard,
-// nodos y panel, copias, configuración, administradores y logs.
+// src/routes.js - Todas las rutas de la página (versión 2):
+// paneles múltiples, nodos editables, copias organizadas por fechas,
+// cancelación de tareas y contador de la próxima copia automática.
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, getSetting, setSetting } = require('./db');
@@ -10,13 +11,12 @@ const logger = require('./logger');
 
 const router = express.Router();
 
-// Lista de permisos que se pueden asignar a los administradores creados desde la página
 const PERMISSIONS = [
   ['run_backups', 'Hacer copias manuales'],
   ['restore_backups', 'Restaurar copias'],
   ['download_backups', 'Descargar copias'],
   ['delete_backups', 'Eliminar copias'],
-  ['manage_nodes', 'Gestionar nodos y panel'],
+  ['manage_nodes', 'Gestionar nodos y paneles'],
   ['manage_settings', 'Cambiar la configuración'],
   ['manage_admins', 'Gestionar administradores'],
   ['view_logs', 'Ver registros (logs)'],
@@ -37,7 +37,7 @@ function requireLogin(req, res, next) {
 function requirePerm(perm) {
   return (req, res, next) => {
     if (can(req.session.admin, perm)) return next();
-    res.redirect(back(req) + '?err=' + encodeURIComponent('No tienes permiso para realizar esta acción.'));
+    go(res, back(req), null, 'No tienes permiso para realizar esta acción.');
   };
 }
 
@@ -52,17 +52,24 @@ function go(res, path, ok, err) {
   res.redirect(path + q);
 }
 
-// Envuelve rutas async para capturar errores y mostrarlos como aviso
 const wrap = (fn) => (req, res) =>
   Promise.resolve(fn(req, res)).catch((e) => {
     logger.error(e.message);
     go(res, back(req), null, e.message);
   });
 
+// Cuándo toca la próxima copia automática (timestamp en ms) o null si está apagada
+function nextAutoRun() {
+  const hours = parseInt(getSetting('schedule_hours', '0'), 10);
+  if (!hours) return null;
+  const last = parseInt(getSetting('last_auto_run', '0'), 10) || Date.now();
+  return last + hours * 3600 * 1000;
+}
+
 // ---------------------------------------------------------------------------
 // Inicio de sesión (con límite de intentos por IP)
 // ---------------------------------------------------------------------------
-const attempts = new Map(); // ip -> { count, until }
+const attempts = new Map();
 
 router.get('/login', (req, res) => {
   if (req.session.admin) return res.redirect('/');
@@ -96,7 +103,6 @@ router.post('/login', (req, res) => {
 
 router.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 
-// A partir de aquí, todo requiere haber iniciado sesión
 router.use(requireLogin);
 
 // ---------------------------------------------------------------------------
@@ -105,33 +111,116 @@ router.use(requireLogin);
 router.get('/', (req, res) => {
   const stats = {
     nodes: db.prepare('SELECT COUNT(*) AS c FROM nodes').get().c,
+    panels: db.prepare('SELECT COUNT(*) AS c FROM panels').get().c,
     backups: db.prepare('SELECT COUNT(*) AS c FROM backups').get().c,
     size: db.prepare('SELECT COALESCE(SUM(size),0) AS s FROM backups').get().s,
     last: db.prepare('SELECT created_at FROM backups ORDER BY id DESC LIMIT 1').get(),
-    panelConfigured: !!backup.getPanelConfig(),
     scheduleHours: parseInt(getSetting('schedule_hours', '0'), 10),
     retentionHours: parseInt(getSetting('retention_hours', '0'), 10),
   };
   const nodes = db.prepare('SELECT id, name FROM nodes').all();
-  res.render('dashboard', { title: 'Panel', active: 'dash', stats, nodes });
+  res.render('dashboard', { title: 'Inicio', active: 'dash', stats, nodes });
 });
 
 // ---------------------------------------------------------------------------
-// Nodos y configuración del panel
+// Paneles (puede haber varios)
+// ---------------------------------------------------------------------------
+router.post('/panels', requirePerm('manage_nodes'), (req, res) => {
+  const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
+  if (!name || !host || !ssh_password || !db_password) {
+    return go(res, '/nodes', null, 'Nombre, IP, contraseña SSH y contraseña de la BD son obligatorios.');
+  }
+  db.prepare(`
+    INSERT INTO panels (name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
+    encrypt(ssh_password), (db_user || 'pterodactyl').trim(), encrypt(db_password),
+    (db_name || 'panel').trim(), (env_path || '/var/www/pterodactyl/.env').trim()
+  );
+  logger.info(`Panel agregado: "${name}" (${host}).`);
+  go(res, '/nodes', `Panel "${name}" agregado.`);
+});
+
+router.post('/panels/:id/update', requirePerm('manage_nodes'), (req, res) => {
+  const p = db.prepare('SELECT * FROM panels WHERE id = ?').get(req.params.id);
+  if (!p) return go(res, '/nodes', null, 'El panel no existe.');
+  const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
+  if (!name || !host) return go(res, '/nodes', null, 'El nombre y la IP son obligatorios.');
+  db.prepare(`
+    UPDATE panels SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?
+    WHERE id=?
+  `).run(
+    name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
+    ssh_password ? encrypt(ssh_password) : p.ssh_password,
+    (db_user || 'pterodactyl').trim(),
+    db_password ? encrypt(db_password) : p.db_password,
+    (db_name || 'panel').trim(), (env_path || '/var/www/pterodactyl/.env').trim(),
+    p.id
+  );
+  logger.info(`Panel actualizado: "${name}" (por ${req.session.admin.email}).`);
+  go(res, '/nodes', `Panel "${name}" actualizado.`);
+});
+
+router.post('/panels/:id/delete', requirePerm('manage_nodes'), (req, res) => {
+  const p = db.prepare('SELECT * FROM panels WHERE id = ?').get(req.params.id);
+  if (!p) return go(res, '/nodes', null, 'El panel no existe.');
+  db.prepare('DELETE FROM panels WHERE id = ?').run(p.id);
+  db.prepare('UPDATE nodes SET panel_id = NULL WHERE panel_id = ?').run(p.id);
+  logger.info(`Panel eliminado: "${p.name}" (sus copias guardadas se conservan).`);
+  go(res, '/nodes', `Panel "${p.name}" eliminado.`);
+});
+
+router.post('/panels/:id/test', requirePerm('manage_nodes'), wrap(async (req, res) => {
+  const p = db.prepare('SELECT * FROM panels WHERE id = ?').get(req.params.id);
+  if (!p) return res.json({ ok: false, message: 'El panel no existe.' });
+  try {
+    const out = await withConn(
+      { host: p.host, port: p.ssh_port, user: p.ssh_user, password: decrypt(p.ssh_password) },
+      (conn) => exec(conn, `mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(decrypt(p.db_password))} ${sq(p.db_name)} -e ${sq('SELECT COUNT(*) FROM servers')}`)
+    );
+    res.json({ ok: true, message: `Conexión correcta con "${p.name}". Servidores en el panel: ${out.trim()}.` });
+  } catch (e) {
+    res.json({ ok: false, message: e.message });
+  }
+}));
+
+// ---------------------------------------------------------------------------
+// Nodos
 // ---------------------------------------------------------------------------
 router.get('/nodes', (req, res) => {
-  const nodes = db.prepare('SELECT * FROM nodes ORDER BY id').all();
-  const panel = backup.getPanelConfig();
-  res.render('nodes', { title: 'Nodos y Panel', active: 'nodes', nodes, panel });
+  const panels = db.prepare('SELECT * FROM panels ORDER BY id').all();
+  const nodes = db.prepare(`
+    SELECT n.*, p.name AS panel_name FROM nodes n
+    LEFT JOIN panels p ON p.id = n.panel_id
+    ORDER BY n.id
+  `).all();
+  res.render('nodes', { title: 'Nodos y Paneles', active: 'nodes', nodes, panels });
 });
 
 router.post('/nodes', requirePerm('manage_nodes'), (req, res) => {
-  const { name, host, ssh_port, ssh_user, ssh_password } = req.body;
+  const { name, host, ssh_port, ssh_user, ssh_password, panel_id } = req.body;
   if (!name || !host || !ssh_password) return go(res, '/nodes', null, 'Nombre, IP y contraseña SSH son obligatorios.');
-  db.prepare('INSERT INTO nodes (name, host, ssh_port, ssh_user, ssh_password) VALUES (?, ?, ?, ?, ?)')
-    .run(name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(), encrypt(ssh_password));
-  logger.info(`Nodo agregado: "${name}" (${host})`);
+  db.prepare('INSERT INTO nodes (name, host, ssh_port, ssh_user, ssh_password, panel_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(), encrypt(ssh_password), parseInt(panel_id, 10) || null);
+  logger.info(`Nodo agregado: "${name}" (${host}).`);
   go(res, '/nodes', `Nodo "${name}" agregado correctamente.`);
+});
+
+router.post('/nodes/:id/update', requirePerm('manage_nodes'), (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return go(res, '/nodes', null, 'El nodo no existe.');
+  const { name, host, ssh_port, ssh_user, ssh_password, panel_id } = req.body;
+  if (!name || !host) return go(res, '/nodes', null, 'El nombre y la IP son obligatorios.');
+  db.prepare('UPDATE nodes SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, panel_id=? WHERE id=?')
+    .run(
+      name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
+      ssh_password ? encrypt(ssh_password) : node.ssh_password,
+      parseInt(panel_id, 10) || null,
+      node.id
+    );
+  logger.info(`Nodo actualizado: "${name}" (por ${req.session.admin.email}).`);
+  go(res, '/nodes', `Nodo "${name}" actualizado.`);
 });
 
 router.post('/nodes/:id/delete', requirePerm('manage_nodes'), (req, res) => {
@@ -162,71 +251,57 @@ router.post('/nodes/:id/test', requirePerm('manage_nodes'), wrap(async (req, res
   }
 }));
 
-router.post('/panel', requirePerm('manage_nodes'), (req, res) => {
-  const { host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
-  const current = backup.getPanelConfig();
-  if (!host) return go(res, '/nodes', null, 'La IP del panel es obligatoria.');
-  if (!current && (!ssh_password || !db_password)) {
-    return go(res, '/nodes', null, 'La contraseña SSH y la de la base de datos son obligatorias.');
-  }
-  const sshPass = ssh_password ? encrypt(ssh_password) : current.ssh_password;
-  const dbPass = db_password ? encrypt(db_password) : current.db_password;
-  db.prepare(`
-    INSERT INTO panel_config (id, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path)
-    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET host=excluded.host, ssh_port=excluded.ssh_port, ssh_user=excluded.ssh_user,
-      ssh_password=excluded.ssh_password, db_user=excluded.db_user, db_password=excluded.db_password,
-      db_name=excluded.db_name, env_path=excluded.env_path
-  `).run(
-    host.trim(),
-    parseInt(ssh_port, 10) || 22,
-    (ssh_user || 'root').trim(),
-    sshPass,
-    (db_user || 'pterodactyl').trim(),
-    dbPass,
-    (db_name || 'panel').trim(),
-    (env_path || '/var/www/pterodactyl/.env').trim()
-  );
-  logger.info(`Configuración del panel guardada (${host}).`);
-  go(res, '/nodes', 'Configuración del panel guardada.');
-});
-
-router.post('/panel/test', requirePerm('manage_nodes'), wrap(async (req, res) => {
-  const p = backup.getPanelConfig();
-  if (!p) return res.json({ ok: false, message: 'Primero guarda la configuración del panel.' });
-  try {
-    const out = await withConn(
-      { host: p.host, port: p.ssh_port, user: p.ssh_user, password: decrypt(p.ssh_password) },
-      (conn) => exec(conn, `mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(decrypt(p.db_password))} ${sq(p.db_name)} -e ${sq('SELECT COUNT(*) FROM servers')}`)
-    );
-    res.json({ ok: true, message: `Conexión correcta. Servidores en el panel: ${out.trim()}.` });
-  } catch (e) {
-    res.json({ ok: false, message: e.message });
-  }
-}));
-
 // ---------------------------------------------------------------------------
-// Copias de seguridad
+// Copias: vista general (tarjetas por nodo + BD de paneles aparte)
 // ---------------------------------------------------------------------------
 router.get('/backups', (req, res) => {
-  const rows = db.prepare(`
-    SELECT b.*, n.name AS node_name FROM backups b
-    LEFT JOIN nodes n ON n.id = b.node_id
-    ORDER BY b.id DESC LIMIT 1000
+  const nodes = db.prepare(`
+    SELECT n.*,
+      (SELECT COUNT(*) FROM snapshots s WHERE s.node_id = n.id) AS snaps,
+      (SELECT MAX(created_at) FROM snapshots s WHERE s.node_id = n.id) AS last_snap,
+      (SELECT COALESCE(SUM(size),0) FROM backups b WHERE b.node_id = n.id AND b.type = 'server') AS total_size
+    FROM nodes n ORDER BY n.id
   `).all();
-  const nodes = db.prepare('SELECT id, name FROM nodes').all();
-  const panelBackups = rows.filter((r) => r.type === 'panel_db');
-  res.render('backups', { title: 'Copias', active: 'backups', rows, nodes, panelBackups });
+  const panelBackups = db.prepare(`
+    SELECT b.*, p.name AS panel_name FROM backups b
+    LEFT JOIN panels p ON p.id = b.panel_id
+    WHERE b.type = 'panel_db' ORDER BY b.id DESC LIMIT 300
+  `).all();
+  res.render('backups', { title: 'Copias', active: 'backups', nodes, panelBackups });
 });
 
-// Copia manual (botón "Hacer copia ahora"). Se ejecuta en segundo plano.
+// Fechas de copia de UN nodo
+router.get('/nodes/:id/backups', (req, res) => {
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(req.params.id);
+  if (!node) return go(res, '/backups', null, 'El nodo no existe.');
+  const snapshots = db.prepare(`
+    SELECT s.*,
+      (SELECT COUNT(*) FROM backups b WHERE b.snapshot_id = s.id) AS cnt,
+      (SELECT COALESCE(SUM(size),0) FROM backups b WHERE b.snapshot_id = s.id) AS total_size
+    FROM snapshots s WHERE s.node_id = ? ORDER BY s.id DESC
+  `).all(node.id);
+  res.render('node_backups', { title: `Copias de ${node.name}`, active: 'backups', node, snapshots });
+});
+
+// Servidores dentro de UNA fecha de copia
+router.get('/snapshots/:id', (req, res) => {
+  const snap = db.prepare('SELECT * FROM snapshots WHERE id = ?').get(req.params.id);
+  if (!snap) return go(res, '/backups', null, 'La fecha de copia no existe.');
+  const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(snap.node_id);
+  const rows = db.prepare("SELECT * FROM backups WHERE snapshot_id = ? AND type = 'server' ORDER BY owner_name, server_name").all(snap.id);
+  res.render('snapshot', { title: `Copia ${snap.created_at}`, active: 'backups', snap, node, rows });
+});
+
+// ---------------------------------------------------------------------------
+// Acciones de copias
+// ---------------------------------------------------------------------------
 router.post('/backups/run', requirePerm('run_backups'), (req, res) => {
   if (backup.job.active) return go(res, back(req), null, 'Ya hay una tarea en ejecución.');
   const target = ['both', 'nodes', 'panel', 'node'].includes(req.body.target) ? req.body.target : 'both';
   const opts = target === 'node' ? { target: 'nodes', nodeId: parseInt(req.body.node_id, 10) } : { target };
   logger.info(`Copia manual iniciada por ${req.session.admin.email}.`);
   backup.runBackup(opts).catch((e) => logger.error(e.message));
-  go(res, back(req) === '/login' ? '/' : back(req), 'Copia iniciada. Puedes ver el progreso en tiempo real arriba.');
+  go(res, back(req) === '/login' ? '/' : back(req), 'Copia iniciada. Mira el progreso arriba (puedes cancelarla).');
 });
 
 router.get('/backups/:id/download', requirePerm('download_backups'), (req, res) => {
@@ -240,23 +315,30 @@ router.get('/backups/:id/download', requirePerm('download_backups'), (req, res) 
 
 router.post('/backups/:id/delete', requirePerm('delete_backups'), wrap(async (req, res) => {
   backup.deleteBackup(req.params.id);
-  go(res, '/backups', 'Copia eliminada.');
+  go(res, back(req), 'Copia eliminada.');
 }));
 
 router.post('/backups/:id/restore', requirePerm('restore_backups'), (req, res) => {
   const wipe = req.body.wipe === '1';
-  logger.info(`Restauración iniciada por ${req.session.admin.email} (copia #${req.params.id}).`);
+  logger.info(`Restauración de un servidor iniciada por ${req.session.admin.email} (copia #${req.params.id}).`);
   backup.restoreServer(req.params.id, wipe).catch((e) => logger.error(e.message));
-  go(res, '/backups', 'Restauración iniciada. Mira el progreso arriba.');
+  go(res, back(req), 'Restauración iniciada. Mira el progreso arriba.');
 });
 
-router.post('/restore-all', requirePerm('restore_backups'), (req, res) => {
-  const nodeId = req.body.node_id ? parseInt(req.body.node_id, 10) : null;
+// Restaurar TODOS los servidores de una fecha (no toca la BD del panel)
+router.post('/snapshots/:id/restore', requirePerm('restore_backups'), (req, res) => {
   const wipe = req.body.wipe === '1';
-  logger.info(`Restauración masiva iniciada por ${req.session.admin.email}.`);
-  backup.restoreAll(nodeId, wipe).catch((e) => logger.error(e.message));
-  go(res, '/backups', 'Restauración masiva iniciada. Mira el progreso arriba.');
+  logger.info(`Restauración de fecha completa iniciada por ${req.session.admin.email} (fecha #${req.params.id}).`);
+  backup.restoreSnapshot(parseInt(req.params.id, 10), wipe).catch((e) => logger.error(e.message));
+  go(res, back(req), 'Restauración de la fecha iniciada. Mira el progreso arriba.');
 });
+
+router.post('/snapshots/:id/delete', requirePerm('delete_backups'), wrap(async (req, res) => {
+  const snap = db.prepare('SELECT * FROM snapshots WHERE id = ?').get(req.params.id);
+  if (!snap) return go(res, '/backups', null, 'La fecha de copia no existe.');
+  backup.deleteSnapshot(snap.id);
+  go(res, `/nodes/${snap.node_id}/backups`, 'Fecha de copia eliminada.');
+}));
 
 router.post('/restore-panel', requirePerm('restore_backups'), (req, res) => {
   const id = parseInt(req.body.backup_id, 10);
@@ -275,16 +357,28 @@ router.post('/restore-panel', requirePerm('restore_backups'), (req, res) => {
       return go(res, '/backups', null, 'Para restaurar a otro VPS necesitas IP, contraseña SSH y contraseña de la BD.');
     }
   }
-  logger.info(`Restauración de la BD del panel iniciada por ${req.session.admin.email}.`);
+  logger.info(`Restauración de la BD de un panel iniciada por ${req.session.admin.email}.`);
   backup.restorePanelDb(id, target).catch((e) => logger.error(e.message));
   go(res, '/backups', 'Restauración de la base de datos iniciada. Mira el progreso arriba.');
 });
 
-// Estado de la tarea actual (para refrescar la barra de progreso al cargar la página)
-router.get('/api/job', (req, res) => res.json(backup.job));
+// ---------------------------------------------------------------------------
+// API de estado: progreso + próxima copia automática
+// ---------------------------------------------------------------------------
+router.get('/api/job', (req, res) => {
+  res.json({ ...backup.job, next_run: nextAutoRun(), server_now: Date.now() });
+});
+
+router.post('/api/job/cancel', (req, res) => {
+  if (!can(req.session.admin, 'run_backups')) {
+    return res.json({ ok: false, message: 'No tienes permiso para cancelar tareas.' });
+  }
+  const ok = backup.requestCancel();
+  res.json({ ok, message: ok ? 'Cancelando la tarea...' : 'No hay ninguna tarea en ejecución.' });
+});
 
 // ---------------------------------------------------------------------------
-// Configuración (copias automáticas y retención)
+// Configuración
 // ---------------------------------------------------------------------------
 router.get('/settings', requirePerm('manage_settings'), (req, res) => {
   res.render('settings', {

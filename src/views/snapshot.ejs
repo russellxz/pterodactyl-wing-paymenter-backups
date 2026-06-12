@@ -1,0 +1,72 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1>Copia del <%= snap.created_at %></h1>
+  <p>Nodo: <b><%= node ? node.name : 'Nodo eliminado' %></b> — <%= rows.length %> servidores guardados en esta fecha.</p>
+</header>
+
+<div class="toolbar">
+  <a class="btn" href="<%= node ? '/nodes/' + node.id + '/backups' : '/backups' %>"><i data-lucide="arrow-left"></i>Volver a las fechas</a>
+  <div class="toolbar-actions">
+    <% if (can('restore_backups')) { %>
+    <form method="post" action="/snapshots/<%= snap.id %>/restore" class="inline" data-confirm="¿Restaurar TODOS los servidores de esta fecha al nodo? (La BD del panel NO se toca)." data-wipe-ask="1">
+      <input type="hidden" name="wipe" value="0">
+      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar toda esta fecha</button>
+    </form>
+    <% } %>
+    <% if (can('delete_backups')) { %>
+    <form method="post" action="/snapshots/<%= snap.id %>/delete" class="inline" data-confirm="¿Eliminar esta fecha completa con sus <%= rows.length %> copias? No se puede deshacer.">
+      <button class="btn btn-danger" type="submit"><i data-lucide="trash-2"></i>Eliminar esta fecha</button>
+    </form>
+    <% } %>
+  </div>
+</div>
+
+<section class="card">
+  <div class="toolbar">
+    <div class="search">
+      <i data-lucide="search"></i>
+      <input id="search" type="search" placeholder="Buscar por nombre, correo o servidor..." oninput="filterTable()">
+    </div>
+  </div>
+
+  <% if (rows.length) { %>
+  <div class="table-wrap">
+    <table id="backups-table">
+      <thead>
+        <tr><th>Usuario</th><th>Correo</th><th>Servidor</th><th>Tamaño</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(b => { %>
+        <tr data-search="<%= (b.owner_name + ' ' + b.owner_email + ' ' + b.server_name + ' ' + b.filename).toLowerCase() %>">
+          <td><%= b.owner_name %></td>
+          <td class="muted"><%= b.owner_email %></td>
+          <td><b><%= b.server_name %></b></td>
+          <td><%= fmtSize(b.size) %></td>
+          <td class="row-actions">
+            <% if (can('download_backups')) { %>
+            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
+            <% } %>
+            <% if (can('restore_backups')) { %>
+            <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="¿Restaurar &quot;<%= b.server_name %>&quot; a su nodo? Los archivos de la copia sobrescribirán los actuales." data-wipe-ask="1">
+              <input type="hidden" name="wipe" value="0">
+              <button class="btn btn-sm" type="submit" title="Restaurar este servidor"><i data-lucide="history"></i></button>
+            </form>
+            <% } %>
+            <% if (can('delete_backups')) { %>
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar la copia de &quot;<%= b.server_name %>&quot;? No se puede deshacer.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Esta fecha no tiene servidores guardados.</p>
+  <% } %>
+</section>
+
+<%- include('partials/foot') %>

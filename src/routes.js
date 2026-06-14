@@ -73,7 +73,18 @@ const attempts = new Map();
 
 router.get('/login', (req, res) => {
   if (req.session.admin) return res.redirect('/');
-  res.render('login', { error: req.query.err || null });
+  // Seguridad: nunca reflejamos texto libre de la URL (evita XSS por ?err=).
+  // Solo se muestran mensajes de una lista conocida; cualquier otra cosa se
+  // convierte en un mensaje genérico.
+  const ALLOWED_LOGIN_MSGS = {
+    invalid: 'Correo o contraseña incorrectos.',
+    locked: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
+    session: 'Tu sesión expiró. Inicia sesión de nuevo.',
+    logout: 'Sesión cerrada correctamente.'
+  };
+  const raw = String(req.query.err || '');
+  const error = ALLOWED_LOGIN_MSGS[raw] || (raw ? 'No se pudo iniciar sesión.' : null);
+  res.render('login', { error });
 });
 
 router.post('/login', (req, res) => {

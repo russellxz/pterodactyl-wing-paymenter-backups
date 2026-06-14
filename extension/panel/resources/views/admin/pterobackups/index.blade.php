@@ -149,10 +149,11 @@ function pbSize(b) {
     return (b / 1073741824).toFixed(2) + ' GB';
 }
 
-function pbApi(path, method, body) {
+function pbApi(path, method, body, _retried) {
     var opts = {
         method: method || 'GET',
-        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.PB_CSRF }
+        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': window.PB_CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
     };
     if (body) {
         opts.headers['Content-Type'] = 'application/json';
@@ -163,6 +164,15 @@ function pbApi(path, method, body) {
             try {
                 return JSON.parse(t);
             } catch (e) {
+                // 403/429 suelen venir de Cloudflare (Bot Fight Mode). Reintentar una vez.
+                if ((r.status === 403 || r.status === 429) && !_retried) {
+                    return new Promise(function (res) {
+                        setTimeout(function () { res(pbApi(path, method, body, true)); }, 1200);
+                    });
+                }
+                if (r.status === 403 || r.status === 429) {
+                    return { ok: false, message: 'Cloudflare bloqueó la petición (código ' + r.status + '). En Cloudflare desactiva "Bot Fight Mode" o crea una regla WAF que omita la ruta /pterobackups.' };
+                }
                 if (r.status === 419) {
                     return { ok: false, message: 'Tu sesión expiró. Recarga la página (F5) e inténtalo de nuevo.' };
                 }

@@ -158,7 +158,18 @@ function pbApi(path, method, body) {
         opts.headers['Content-Type'] = 'application/json';
         opts.body = JSON.stringify(body);
     }
-    return fetch(window.PB_BASE + path, opts).then(function (r) { return r.json(); });
+    return fetch(window.PB_BASE + path, opts).then(function (r) {
+        return r.text().then(function (t) {
+            try {
+                return JSON.parse(t);
+            } catch (e) {
+                if (r.status === 419) {
+                    return { ok: false, message: 'Tu sesión expiró. Recarga la página (F5) e inténtalo de nuevo.' };
+                }
+                return { ok: false, message: 'Respuesta inesperada del servidor (código ' + r.status + '). Recarga la página e inténtalo de nuevo.' };
+            }
+        });
+    });
 }
 
 function pbWipeAsk() {

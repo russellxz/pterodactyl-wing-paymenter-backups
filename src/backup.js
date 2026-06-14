@@ -27,7 +27,7 @@ const ZIP_EXCLUDES = '-x "node_modules/*" -x "*/node_modules/*" -x "package-lock
 // ---------------------------------------------------------------------------
 // Estado de la tarea actual (se emite en tiempo real por Socket.IO)
 // ---------------------------------------------------------------------------
-const job = { active: false, name: null, message: '', current: 0, total: 0, cancelRequested: false };
+const job = { active: false, name: null, message: '', current: 0, total: 0, cancelRequested: false, target_uuid: null };
 
 function setJob(patch) {
   Object.assign(job, patch);
@@ -209,7 +209,7 @@ async function backupPanelDb(p) {
 async function runBackup(opts = {}) {
   if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine o cancélala.');
   const target = opts.target || getSetting('backup_target', 'both');
-  setJob({ active: true, name: 'Copia de seguridad', message: 'Iniciando...', current: 0, total: 0, cancelRequested: false });
+  setJob({ active: true, name: 'Copia de seguridad', message: 'Iniciando...', current: 0, total: 0, cancelRequested: false, target_uuid: null });
   try {
     // 1) Bases de datos de los paneles (cada una por separado)
     if (target === 'panel' || target === 'both') {
@@ -275,12 +275,12 @@ async function restoreServer(backupId, wipe = false) {
   const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'server'").get(backupId);
   if (!b) throw new Error('La copia no existe.');
   if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
-  setJob({ active: true, name: 'Restauración', message: `Restaurando "${b.server_name}"...`, current: 0, total: 1, cancelRequested: false });
+  setJob({ active: true, name: 'Restauración', message: `Restaurando "${b.server_name}"...`, current: 0, total: 1, cancelRequested: false, target_uuid: b.server_uuid });
   try {
     await restoreServerRow(b, wipe);
     setJob({ current: 1 });
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false, target_uuid: null });
   }
 }
 
@@ -321,7 +321,7 @@ async function restoreSnapshot(snapshotId, wipe = false) {
   if (!rows.length) throw new Error('Esta fecha de copia no tiene servidores guardados.');
   if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
 
-  setJob({ active: true, name: 'Restauración de fecha', message: 'Iniciando...', current: 0, total: rows.length, cancelRequested: false });
+  setJob({ active: true, name: 'Restauración de fecha', message: 'Iniciando...', current: 0, total: rows.length, cancelRequested: false, target_uuid: null });
   try {
     for (const b of rows) {
       if (job.cancelRequested) break;

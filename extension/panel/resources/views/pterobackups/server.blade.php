@@ -78,6 +78,9 @@
                 try {
                     return JSON.parse(t);
                 } catch (e) {
+                    if (r.status === 403 || r.status === 429) {
+                        return { ok: false, message: 'Cloudflare bloqueó la petición. Avisa al administrador para que ajuste la protección de bots, o inténtalo de nuevo en un momento.' };
+                    }
                     if (r.status === 419) {
                         return { ok: false, message: 'Tu sesión expiró. Recarga la página (F5) e inténtalo de nuevo.' };
                     }
@@ -112,17 +115,28 @@
                 .catch(function () {});
         }
 
-        window.pbRestore = function (id) {
+        window.pbRestore = function (id, _retried) {
             if (restoring) { alert('Ya hay una restauración en curso para tu servidor. Espera a que termine.'); return; }
-            if (!confirm('¿Restaurar esta copia a tu servidor? Los archivos de la copia sobrescribirán los actuales.')) return;
-            var wipe = confirm('¿Quieres VACIAR los archivos actuales antes de restaurar?\n\nAceptar = vaciar y restaurar limpio.\nCancelar = restaurar encima de los archivos actuales.');
+            if (!_retried) {
+                if (!confirm('¿Restaurar esta copia a tu servidor? Los archivos de la copia sobrescribirán los actuales.')) return;
+                window._pbWipe = confirm('¿Quieres VACIAR los archivos actuales antes de restaurar?\n\nAceptar = vaciar y restaurar limpio.\nCancelar = restaurar encima de los archivos actuales.');
+            }
             fetch(BASE + '/restore/' + id, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ wipe: wipe })
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ wipe: window._pbWipe })
             })
-                .then(readJson)
+                .then(function (r) {
+                    if ((r.status === 403 || r.status === 429) && !_retried) {
+                        return new Promise(function (res) {
+                            setTimeout(function () { window.pbRestore(id, true); res(null); }, 1200);
+                        });
+                    }
+                    return readJson(r);
+                })
                 .then(function (d) {
+                    if (d === null) return;
                     if (!d.ok) { alert('No se pudo iniciar: ' + (d.message || 'error')); return; }
                     pollJob();
                 })

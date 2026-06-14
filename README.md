@@ -277,7 +277,7 @@ sudo systemctl restart pterobackups
 La extensión conecta tu panel de Pterodactyl con esta página de copias:
 
 - **Admins del panel:** nueva sección **PteroBackups** en el área admin con todo lo de la página: hacer copias al momento, cancelar, progreso en vivo, contador de la próxima copia automática, fechas de copia por nodo, buscador de servidores por nombre o correo, descargar, restaurar, eliminar y cambiar la programación.
-- **Usuarios:** opción **"Backup 2.0"** en el menú lateral de su servidor para ver, **descargar** y **restaurar** SOLO las copias de su servidor. Si el tema del panel impide poner el botón en el menú, aparece un **botón flotante** abajo a la derecha que lleva a la misma página.
+- **Usuarios:** opción **"Backup 2.0"** en el menú lateral de su servidor para ver, **descargar** y **restaurar** SOLO las copias de su servidor.
 - **Compatible con el tema Arix v2** y con cualquier otro tema: la extensión **no recompila el panel** (que es lo que rompe los temas), y el botón del menú copia el diseño del tema activo.
 
 ### Paso 1 — Copiar los datos de conexión
@@ -312,7 +312,7 @@ El instalador copia las piezas al panel, agrega las rutas y limpia las cachés. 
 2. Pega la **URL** y la **clave de API** del Paso 1.
 3. Pulsa **Guardar y probar conexión**. Debe decir **"Conexión correcta"**.
 
-Recarga el panel con `Ctrl + F5`, entra a cualquier servidor y verás **"Backup 2.0"** en el menú (o el botón flotante). La conexión queda guardada en la base de datos del panel: si algún día reinstalas el panel con la misma BD, solo vuelve a ejecutar `install.sh` y reconecta sola.
+Recarga el panel con `Ctrl + F5`, entra a cualquier servidor y verás **"Backup 2.0"** en el menú lateral de tu servidor. La conexión queda guardada en la base de datos del panel: si algún día reinstalas el panel con la misma BD, solo vuelve a ejecutar `install.sh` y reconecta sola.
 
 ### Actualizar la extensión cuando haya cambios
 

@@ -67,4 +67,4 @@ sudo bash uninstall.sh
 
 ## Importante si usas el tema Arix
 
-Arix reemplaza el archivo `wrapper.blade.php` del panel cuando se instala o se actualiza, y eso borra el script del botón. **Después de instalar o actualizar Arix, vuelve a ejecutar `sudo bash install.sh`** (tarda segundos y no daña nada). Además, si el tema redibuja el menú y no deja poner el botón, la extensión muestra un **botón flotante "Backup 2.0"** abajo a la derecha en las páginas del servidor, para que los usuarios siempre tengan acceso.
+Arix reemplaza el archivo `wrapper.blade.php` del panel cuando se instala o se actualiza, y eso borra el script del botón. **Después de instalar o actualizar Arix, vuelve a ejecutar `sudo bash install.sh`** (tarda segundos y no daña nada).

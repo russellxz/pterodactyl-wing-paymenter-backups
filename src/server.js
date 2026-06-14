@@ -28,7 +28,7 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   store: new MemoryStore({ checkPeriod: 86400000 }),
-  cookie: { maxAge: 8 * 60 * 60 * 1000, sameSite: 'lax' },
+  cookie: { maxAge: 8 * 60 * 60 * 1000, sameSite: 'strict', httpOnly: true },
 });
 app.use(sessionMiddleware);
 
@@ -44,16 +44,49 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// API para la extensión del panel (autenticación propia por clave)
+// API para la extensión del panel (autenticación propia por clave Bearer)
 const extapi = require('./extapi');
 app.use('/api/ext', extapi.router);
 extapi.ensureKey();
 
+// Proteccion CSRF: toda peticion que cambia datos (POST/PUT/DELETE) debe venir
+// del propio sitio. Verificamos el header Origin/Referer contra el Host real.
+// La API externa (/api/ext) queda fuera porque se autentica con token Bearer.
+app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return next();
+  if (req.path.startsWith('/api/ext')) return next();
+
+  const host = req.get('host');
+  const origin = req.get('origin');
+  const referer = req.get('referer');
+  let sourceHost = null;
+  try {
+    if (origin) sourceHost = new URL(origin).host;
+    else if (referer) sourceHost = new URL(referer).host;
+  } catch (e) { sourceHost = null; }
+
+  // Si no hay Origin ni Referer (algunos clientes legítimos), exigimos sesión.
+  if (!sourceHost) {
+    if (req.session && req.session.admin) return next();
+    return res.status(403).send('Solicitud bloqueada (sin origen valido).');
+  }
+  if (sourceHost !== host) {
+    return res.status(403).send('Solicitud bloqueada (origen no permitido).');
+  }
+  next();
+});
+
 // Variables disponibles en todas las vistas
 app.use((req, res, next) => {
   res.locals.admin = req.session.admin || null;
-  res.locals.ok = req.query.ok || null;
-  res.locals.err = req.query.err || null;
+  // Mensajes flash desde la URL: limitados a texto plano corto y sin HTML,
+  // para que no se pueda inyectar codigo via ?ok= o ?err=.
+  const clean = (v) => {
+    if (!v) return null;
+    return String(v).replace(/[<>]/g, '').slice(0, 200);
+  };
+  res.locals.ok = clean(req.query.ok);
+  res.locals.err = clean(req.query.err);
   res.locals.can = (perm) => {
     const a = req.session.admin;
     return !!a && (a.is_root === 1 || (a.permissions || []).includes(perm));

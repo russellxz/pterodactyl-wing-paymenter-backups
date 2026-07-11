@@ -1,6 +1,6 @@
 {
   "name": "pterobackups",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "Sistema web de copias de seguridad remotas para Pterodactyl: base de datos del panel y archivos de cada servidor en los nodos (Wings).",
   "main": "src/server.js",
   "scripts": {

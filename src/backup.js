@@ -26,12 +26,26 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const ZIP_EXCLUDES = [
   '-x "node_modules/*"', '-x "*/node_modules/*"',
   '-x "package-lock.json"', '-x "*/package-lock.json"',
-  '-x ".npm/*"', '-x "*/.npm/*"',
+  '-x ".npm/*"', '-x "*/.npm/*"', '-x ".npm"',
   '-x ".cache/*"', '-x "*/.cache/*"',
   '-x ".git/*"', '-x "*/.git/*"',
   '-x "tmp/*"', '-x "*/tmp/*"',
   '-x "*.log"'
-].join(' ');
+].join(' ')
+
+// zip comprime desde "." asi que las rutas internas empiezan con "./".
+// Duplicamos cada patron con ese prefijo para que las exclusiones apliquen
+// tanto en la raiz como en subcarpetas (asi .npm, .git, etc. se excluyen bien).
+const ZIP_EXCLUDES_DOT = [
+  '-x "./node_modules/*"',
+  '-x "./package-lock.json"',
+  '-x "./.npm/*"',
+  '-x "./.cache/*"',
+  '-x "./.git/*"',
+  '-x "./tmp/*"'
+].join(' ')
+
+const ZIP_EXCLUDE_ALL = `${ZIP_EXCLUDES} ${ZIP_EXCLUDES_DOT}`;
 
 // ---------------------------------------------------------------------------
 // Estado de la tarea actual (se emite en tiempo real por Socket.IO)
@@ -141,7 +155,7 @@ async function backupNode(node, meta) {
         const vol = `${VOLUMES_PATH}/${uuid}`;
         const result = await exec(
           conn,
-          `cd ${sq(vol)} && (zip -ryq ${sq(remoteZip)} . ${ZIP_EXCLUDES} >/dev/null 2>&1; if [ -f ${sq(remoteZip)} ]; then echo OK; else echo VACIO; fi)`
+          `cd ${sq(vol)} && (zip -ryq ${sq(remoteZip)} . ${ZIP_EXCLUDE_ALL} >/dev/null 2>&1; if [ -f ${sq(remoteZip)} ]; then echo OK; else echo VACIO; fi)`
         );
         if (result.trim() !== 'OK') {
           logger.warn(`Servidor "${m.server_name}" (${uuid}) está vacío, se omite.`);

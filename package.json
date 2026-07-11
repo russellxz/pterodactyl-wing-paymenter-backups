@@ -1,7 +1,7 @@
 {
   "name": "pterobackups",
-  "version": "3.6.0",
-  "description": "Sistema web de copias de seguridad remotas para Pterodactyl: base de datos del panel y archivos de cada servidor en los nodos (Wings).",
+  "version": "3.7.0",
+  "description": "Sistema web de copias de seguridad remotas para Pterodactyl y Paymenter: base de datos del panel, base de datos de Paymenter y archivos de cada servidor en los nodos (Wings).",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

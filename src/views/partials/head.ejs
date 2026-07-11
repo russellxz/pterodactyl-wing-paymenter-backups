@@ -3,14 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0e1320">
   <title><%= title %> · PteroBackups</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+
+<%# Barra superior SOLO para móvil: marca + botón de menú %>
+<header class="topbar">
+  <button class="menu-btn" type="button" onclick="toggleMenu()" aria-label="Abrir el menú">
+    <i data-lucide="menu"></i>
+  </button>
+  <div class="brand topbar-brand">
+    <span class="brand-mark"><i data-lucide="database-backup"></i></span>
+    <span class="brand-name">Ptero<b>Backups</b></span>
+  </div>
+  <a class="logout" href="/logout" title="Cerrar sesión"><i data-lucide="log-out"></i></a>
+</header>
+<div class="sidebar-backdrop" onclick="toggleMenu(false)"></div>
+
 <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <span class="brand-mark"><i data-lucide="database-backup"></i></span>
       <span class="brand-name">Ptero<b>Backups</b></span>
@@ -18,7 +33,7 @@
     <nav class="nav">
       <a href="/" class="<%= active === 'dash' ? 'active' : '' %>"><i data-lucide="layout-dashboard"></i><span>Inicio</span></a>
       <a href="/backups" class="<%= active === 'backups' ? 'active' : '' %>"><i data-lucide="archive"></i><span>Copias</span></a>
-      <a href="/nodes" class="<%= active === 'nodes' ? 'active' : '' %>"><i data-lucide="server"></i><span>Nodos y Panel</span></a>
+      <a href="/nodes" class="<%= active === 'nodes' ? 'active' : '' %>"><i data-lucide="server"></i><span>Nodos y Paneles</span></a>
       <% if (can('manage_settings')) { %>
       <a href="/settings" class="<%= active === 'settings' ? 'active' : '' %>"><i data-lucide="settings"></i><span>Configuración</span></a>
       <% } %>

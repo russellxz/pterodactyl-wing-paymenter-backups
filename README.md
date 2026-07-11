@@ -1,18 +1,20 @@
 # PteroBackups
 
-Sistema web de copias de seguridad **remotas** para [Pterodactyl](https://pterodactyl.io/). Se instala en un VPS aparte y, conectándose por SSH, hace copias de:
+Sistema web de copias de seguridad **remotas** para [Pterodactyl](https://pterodactyl.io/) y [Paymenter](https://paymenter.org/). Se instala en un VPS aparte y, conectándose por SSH, hace copias de:
 
 - La **base de datos completa del panel** (mysqldump) + el archivo **`.env`** (imprescindible para reinstalaciones).
+- La **base de datos completa de Paymenter** (mysqldump) + su archivo **`.env`**, con su propio temporizador de copias automáticas.
 - Los **archivos de cada servidor de cada nodo (Wings)**, un `.zip` por servidor, nombrado con el **nombre, apellido y correo del dueño** y el **nombre del servidor**, para encontrarlos al instante con el buscador.
 
-Todo se maneja desde una página web con diseño oscuro, iconos profesionales, progreso en tiempo real y registro de errores.
+Todo se maneja desde una página web con diseño oscuro adaptado a móvil, iconos profesionales, progreso en tiempo real y registro de errores.
 
 ## Características
 
 - Copias **manuales** (botón "Hacer copia ahora") y **automáticas** (cada 1 hora, 1, 7, 15 o 30 días).
+- **Temporizadores separados** para los nodos, la BD del panel y la BD de Paymenter: cada uno con su intervalo y su contador en tiempo real, así no se hacen el mismo día ni a la misma hora.
 - **Buscador en tiempo real** por nombre, correo o servidor.
 - **Descargar** cualquier copia desde la web.
-- **Restaurar** un servidor concreto, **todos a la vez**, o la **BD del panel** (al mismo VPS o a uno nuevo).
+- **Restaurar** un servidor concreto, **todos a la vez**, la **BD del panel** o la **BD de Paymenter** (al mismo VPS o a uno nuevo).
 - **Borrado automático** de copias antiguas (retención configurable).
 - **Administradores con permisos** personalizables.
 - **Progreso en tiempo real** y página de **logs** en vivo.
@@ -44,8 +46,9 @@ Todo se maneja desde una página web con diseño oscuro, iconos profesionales, p
 | **VPS del sistema** (donde instalas esta página) | Ubuntu 22.04 o 24.04 limpio y un dominio agregado a Cloudflare |
 | **VPS del panel** Pterodactyl | Acceso SSH con contraseña + `zip` y `unzip` |
 | **Cada nodo (Wings)** | Acceso SSH con contraseña + `zip` y `unzip` |
+| **VPS de Paymenter** (opcional, si usas Paymenter) | Acceso SSH con contraseña + `zip` y `unzip` |
 
-En el **VPS del panel** y en **cada nodo** ejecuta esto (instala las herramientas para comprimir y descomprimir las copias):
+En el **VPS del panel**, en **cada nodo** y en el **VPS de Paymenter** ejecuta esto (instala las herramientas para comprimir y descomprimir las copias):
 
 ```bash
 sudo apt update && sudo apt install -y zip unzip
@@ -243,12 +246,13 @@ sudo ufw allow 'Nginx Full'
 
 1. **Nodos y Paneles → Agregar panel.** Escribe un nombre, la IP del VPS del panel, su contraseña SSH y los datos de la base de datos. Esos datos están en el archivo `/var/www/pterodactyl/.env` **del panel**: `DB_USERNAME` (usuario), `DB_PASSWORD` (contraseña) y `DB_DATABASE` (nombre, normalmente `panel`). Puedes verlos con `cat /var/www/pterodactyl/.env` en el VPS del panel. Pulsa **Probar conexión**. Puedes agregar **varios paneles**.
 2. **Nodos y Paneles → Agregar nodo.** Por cada nodo (Wings): un nombre, su IP, su contraseña SSH y **a qué panel pertenece**. Con el lápiz puedes editar cualquier nodo o panel después (por ejemplo, para cambiar la contraseña SSH).
-3. **Configuración.** Elige cada cuánto se hacen las copias automáticas, qué se copia y cuándo se borran las copias antiguas. Con las copias automáticas activas, verás arriba un **contador en tiempo real** con lo que falta para la siguiente.
-4. **Copias.** Cada pasada crea una **fecha de copia** dentro de cada nodo: entra al nodo → elige la fecha → ahí están todos los servidores con su dueño y correo, con buscador, para **descargar**, **restaurar** uno o **restaurar toda la fecha** (solo archivos de servidores: la BD del panel nunca se toca). Las copias de la **BD de los paneles** están en su propia sección con su propio botón de restaurar (al mismo panel o a otro VPS). Mientras una copia corre puedes **cancelarla**, y el progreso sigue visible aunque recargues la página. Los .zip excluyen `node_modules` y `package-lock.json`.
-5. **Administradores.** Crea más admins marcando solo los permisos que quieras darles.
-6. **Logs.** Toda la actividad y los errores, en tiempo real.
+3. **Nodos y Paneles → Agregar Paymenter** (si usas [Paymenter](https://paymenter.org/) como panel de facturación). Escribe un nombre, la IP del VPS de Paymenter, su contraseña SSH y los datos de su base de datos, que están en `/var/www/paymenter/.env` **del VPS de Paymenter**: `DB_USERNAME` (usuario, normalmente `paymenter`), `DB_PASSWORD` (contraseña) y `DB_DATABASE` (nombre, normalmente `paymenter`). Pulsa **Probar conexión**. Puedes agregar **varias instalaciones**. En el VPS de Paymenter también instala `zip` y `unzip`.
+4. **Configuración.** Elige cada cuánto se hacen las copias automáticas — los **nodos**, la **BD del panel** y la **BD de Paymenter** tienen cada uno **su propio temporizador**, así puedes programarlas en días u horas distintas — y cuándo se borran las copias antiguas. Con las copias automáticas activas, verás arriba **contadores en tiempo real** con lo que falta para cada una.
+5. **Copias.** Cada pasada crea una **fecha de copia** dentro de cada nodo: entra al nodo → elige la fecha → ahí están todos los servidores con su dueño y correo, con buscador, para **descargar**, **restaurar** uno o **restaurar toda la fecha** (solo archivos de servidores: la BD del panel nunca se toca). Las copias de la **BD de los paneles** y las de la **BD de Paymenter** están cada una en su propia sección, con su botón de **descargar** y de **restaurar** (al mismo VPS o a otro nuevo). Mientras una copia corre puedes **cancelarla**, y el progreso sigue visible aunque recargues la página. Los .zip excluyen `node_modules` y `package-lock.json`.
+6. **Administradores.** Crea más admins marcando solo los permisos que quieras darles.
+7. **Logs.** Toda la actividad y los errores, en tiempo real.
 
-Las copias se guardan en `storage/backups/` dentro del proyecto (servidores en `servers/`, BD en `panel/` y las copias del `.env` en `panel/env/`).
+Las copias se guardan en `storage/backups/` dentro del proyecto (servidores en `servers/`, BD del panel en `panel/` con sus `.env` en `panel/env/`, y BD de Paymenter en `paymenter/` con sus `.env` en `paymenter/env/`).
 
 ---
 

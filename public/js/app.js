@@ -50,6 +50,7 @@
   // -------------------------------------------------------------------------
   var nextRunNodes = null;
   var nextRunPanel = null;
+  var nextRunPaymenter = null;
   var serverOffset = 0; // diferencia entre el reloj del servidor y el del navegador
 
   function fmtDur(ms) {
@@ -62,25 +63,25 @@
   }
 
   function updateCountdown() {
-    var chip = el('auto-chip');
-    if (!chip) return;
+    var box = el('auto-chips');
+    if (!box) return;
     var now = Date.now() + serverOffset;
-    var showNodes = !!nextRunNodes;
-    var showPanel = !!nextRunPanel;
-    if (!showNodes && !showPanel) { chip.hidden = true; return; }
-    chip.hidden = false;
-    var nodesSpan = el('auto-nodes');
-    var panelSpan = el('auto-panel');
-    var sep = el('auto-sep');
-    if (nodesSpan) {
-      nodesSpan.hidden = !showNodes;
-      if (showNodes) el('auto-countdown-nodes').textContent = fmtDur(nextRunNodes - now);
-    }
-    if (panelSpan) {
-      panelSpan.hidden = !showPanel;
-      if (showPanel) el('auto-countdown-panel').textContent = fmtDur(nextRunPanel - now);
-    }
-    if (sep) sep.hidden = !(showNodes && showPanel);
+    var items = [
+      { at: nextRunNodes, chip: el('auto-nodes'), num: el('auto-countdown-nodes') },
+      { at: nextRunPanel, chip: el('auto-panel'), num: el('auto-countdown-panel') },
+      { at: nextRunPaymenter, chip: el('auto-paymenter'), num: el('auto-countdown-paymenter') }
+    ];
+    var any = false;
+    items.forEach(function (it) {
+      if (!it.chip) return;
+      var show = !!it.at;
+      it.chip.hidden = !show;
+      if (show) {
+        any = true;
+        if (it.num) it.num.textContent = fmtDur(it.at - now);
+      }
+    });
+    box.hidden = !any;
   }
   setInterval(updateCountdown, 1000);
 
@@ -93,9 +94,22 @@
     renderJob(data);
     nextRunNodes = data.next_run_nodes || null;
     nextRunPanel = data.next_run_panel || null;
+    nextRunPaymenter = data.next_run_paymenter || null;
     if (data.server_now) serverOffset = data.server_now - Date.now();
     updateCountdown();
   }
+
+  // -------------------------------------------------------------------------
+  // Menú lateral en móvil (botón hamburguesa de la barra superior)
+  // -------------------------------------------------------------------------
+  window.toggleMenu = function (force) {
+    var open = typeof force === 'boolean' ? force : !document.body.classList.contains('menu-open');
+    document.body.classList.toggle('menu-open', open);
+  };
+  // Al tocar un enlace del menú, se cierra (la página navega igualmente)
+  document.querySelectorAll('.sidebar .nav a').forEach(function (a) {
+    a.addEventListener('click', function () { window.toggleMenu(false); });
+  });
 
   function fetchState() {
     fetch('/api/job')
@@ -196,6 +210,14 @@
     var dlg = el('panel-restore');
     if (!dlg) return;
     var sel = el('panel-backup-select');
+    if (sel && backupId) sel.value = String(backupId);
+    dlg.showModal();
+  };
+
+  window.openPaymenterRestore = function (backupId) {
+    var dlg = el('paymenter-restore');
+    if (!dlg) return;
+    var sel = el('paymenter-backup-select');
     if (sel && backupId) sel.value = String(backupId);
     dlg.showModal();
   };

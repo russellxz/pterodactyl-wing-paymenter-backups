@@ -11,9 +11,19 @@
   <div class="progress"><div class="progress-bar" id="job-bar" style="width:0%"></div></div>
 </div>
 
-<div class="auto-chip" id="auto-chip" hidden>
-  <i data-lucide="timer"></i>
-  <span id="auto-nodes" hidden>Próxima copia de nodos en <b id="auto-countdown-nodes">—</b></span>
-  <span id="auto-sep" hidden>&nbsp;·&nbsp;</span>
-  <span id="auto-panel" hidden>Próxima copia del panel en <b id="auto-countdown-panel">—</b></span>
+<%# Contadores en tiempo real de las próximas copias automáticas: cada tipo
+    tiene su propio chip y solo aparece si su programación está activada. %>
+<div class="auto-chips" id="auto-chips" hidden>
+  <span class="auto-chip" id="auto-nodes" hidden>
+    <i data-lucide="server"></i>
+    <span class="auto-chip-text">Copia de nodos en <b id="auto-countdown-nodes">—</b></span>
+  </span>
+  <span class="auto-chip" id="auto-panel" hidden>
+    <i data-lucide="database"></i>
+    <span class="auto-chip-text">Copia del panel en <b id="auto-countdown-panel">—</b></span>
+  </span>
+  <span class="auto-chip auto-chip-pay" id="auto-paymenter" hidden>
+    <i data-lucide="credit-card"></i>
+    <span class="auto-chip-text">Copia de Paymenter en <b id="auto-countdown-paymenter">—</b></span>
+  </span>
 </div>

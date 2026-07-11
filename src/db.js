@@ -50,6 +50,22 @@ CREATE TABLE IF NOT EXISTS nodes (
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
+-- Instalaciones de Paymenter (panel de facturación). Se copia su base de
+-- datos (mysqldump) + su archivo .env, igual que con el panel de Pterodactyl.
+CREATE TABLE IF NOT EXISTS paymenters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  host TEXT NOT NULL,
+  ssh_port INTEGER NOT NULL DEFAULT 22,
+  ssh_user TEXT NOT NULL DEFAULT 'root',
+  ssh_password TEXT NOT NULL,
+  db_user TEXT NOT NULL DEFAULT 'paymenter',
+  db_password TEXT NOT NULL,
+  db_name TEXT NOT NULL DEFAULT 'paymenter',
+  env_path TEXT NOT NULL DEFAULT '/var/www/paymenter/.env',
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
 -- Una "fecha de copia" de un nodo: agrupa todos los .zip de los servidores
 -- que se copiaron en esa pasada.
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -101,6 +117,8 @@ function hasColumn(table, col) {
 if (!hasColumn('nodes', 'panel_id')) db.exec('ALTER TABLE nodes ADD COLUMN panel_id INTEGER');
 if (!hasColumn('backups', 'snapshot_id')) db.exec('ALTER TABLE backups ADD COLUMN snapshot_id INTEGER');
 if (!hasColumn('backups', 'panel_id')) db.exec('ALTER TABLE backups ADD COLUMN panel_id INTEGER');
+// v3.7: copias de la BD de Paymenter (tipo 'paymenter_db')
+if (!hasColumn('backups', 'paymenter_id')) db.exec('ALTER TABLE backups ADD COLUMN paymenter_id INTEGER');
 
 // 1) La tabla antigua panel_config (un solo panel) pasa a la tabla panels
 const legacyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='panel_config'").get();

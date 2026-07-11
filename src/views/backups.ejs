@@ -10,9 +10,11 @@
   <h2><i data-lucide="zap"></i>Copia manual</h2>
   <form method="post" action="/backups/run" class="form-inline">
     <select name="target" onchange="document.getElementById('node-pick').hidden = this.value !== 'node'">
-      <option value="both">Todo (nodos + BD de paneles)</option>
+      <option value="all">Todo (nodos + paneles + Paymenter)</option>
+      <option value="both">Nodos + BD de paneles</option>
       <option value="nodes">Solo nodos (archivos de servidores)</option>
       <option value="panel">Solo BD de los paneles</option>
+      <option value="paymenter">Solo BD de Paymenter</option>
       <% if (nodes.length) { %><option value="node">Un nodo específico</option><% } %>
     </select>
     <select name="node_id" id="node-pick" hidden>
@@ -81,6 +83,75 @@
   <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias de bases de datos.</p>
   <% } %>
 </section>
+
+<section class="card">
+  <h2><i data-lucide="credit-card"></i>Copias de la BD de Paymenter</h2>
+  <p class="muted small">Cada copia incluye la base de datos completa de Paymenter (mysqldump) y su archivo <code>.env</code>. Puedes restaurarla al mismo VPS o a uno nuevo. Estas copias van por separado: nunca tocan el panel ni los nodos.</p>
+  <% if (paymenterBackups.length) { %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Paymenter</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <% paymenterBackups.forEach(b => { %>
+        <tr>
+          <td><span class="badge badge-pay"><i data-lucide="credit-card"></i><%= b.paymenter_name || 'Paymenter eliminado' %></span></td>
+          <td><%= fmtSize(b.size) %></td>
+          <td class="muted"><%= b.created_at %></td>
+          <td class="row-actions">
+            <% if (can('download_backups')) { %>
+            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
+            <% } %>
+            <% if (can('restore_backups')) { %>
+            <button class="btn btn-sm" type="button" title="Restaurar BD de Paymenter" onclick="openPaymenterRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
+            <% } %>
+            <% if (can('delete_backups')) { %>
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar esta copia de la base de datos de Paymenter? No se puede deshacer.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias de Paymenter.<% if (!paymenters.length) { %>&nbsp;Agrega tu Paymenter en <a href="/nodes">Nodos y Paneles</a> y usa "Hacer copia ahora" eligiendo "Solo BD de Paymenter".<% } %></p>
+  <% } %>
+</section>
+
+<% if (can('restore_backups') && paymenterBackups.length) { %>
+<dialog id="paymenter-restore" class="modal">
+  <form method="post" action="/restore-paymenter" class="form">
+    <h2><i data-lucide="credit-card"></i>Restaurar base de datos de Paymenter</h2>
+    <label>Copia a restaurar
+      <select name="backup_id" id="paymenter-backup-select">
+        <% paymenterBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.paymenter_name || 'Paymenter eliminado') %> — <%= b.created_at %></option><% }) %>
+      </select>
+    </label>
+    <label>Destino
+      <select name="mode" onchange="document.getElementById('paymenter-custom-target').hidden = this.value !== 'custom'">
+        <option value="saved">El Paymenter de esta copia (configuración guardada)</option>
+        <option value="custom">Otro VPS (Paymenter nuevo)</option>
+      </select>
+    </label>
+    <div id="paymenter-custom-target" hidden class="form-grid">
+      <label>IP del VPS nuevo<input name="host" placeholder="203.0.113.40"></label>
+      <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
+      <label>Usuario SSH<input name="ssh_user" value="root"></label>
+      <label>Contraseña SSH<input name="ssh_password" type="password"></label>
+      <label>Usuario de la BD<input name="db_user" value="paymenter"></label>
+      <label>Contraseña de la BD<input name="db_password" type="password"></label>
+      <label>Nombre de la BD<input name="db_name" value="paymenter"></label>
+    </div>
+    <p class="muted small">El VPS destino debe tener Paymenter ya instalado (con su base de datos creada). El .zip incluye también el archivo <code>.env</code> original por si necesitas copiarlo a <code>/var/www/paymenter/.env</code>. Después de restaurar, limpia cachés en el VPS de Paymenter con <code>php artisan optimize:clear</code>.</p>
+    <div class="form-actions">
+      <button class="btn" type="button" onclick="document.getElementById('paymenter-restore').close()">Cancelar</button>
+      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar base de datos</button>
+    </div>
+  </form>
+</dialog>
+<% } %>
 
 <% if (can('restore_backups') && panelBackups.length) { %>
 <dialog id="panel-restore" class="modal">

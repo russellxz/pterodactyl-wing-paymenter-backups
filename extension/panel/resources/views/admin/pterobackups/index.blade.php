@@ -92,8 +92,8 @@
         <div class="box">
             <div class="box-header with-border"><h3 class="box-title">Programación automática del sistema</h3></div>
             <div class="box-body form-inline">
-                <label>Copias automáticas&nbsp;</label>
-                <select id="pb-sch" class="form-control">
+                <label>Copias de NODOS&nbsp;</label>
+                <select id="pb-sch-nodes" class="form-control">
                     <option value="0">Desactivadas</option>
                     <option value="1">Cada 1 hora</option>
                     <option value="24">Cada 1 día</option>
@@ -101,11 +101,14 @@
                     <option value="360">Cada 15 días</option>
                     <option value="720">Cada 30 días</option>
                 </select>
-                &nbsp;&nbsp;<label>Qué se copia&nbsp;</label>
-                <select id="pb-target" class="form-control">
-                    <option value="both">Todo</option>
-                    <option value="nodes">Solo nodos</option>
-                    <option value="panel">Solo BD de paneles</option>
+                &nbsp;&nbsp;<label>Copias de BD del PANEL&nbsp;</label>
+                <select id="pb-sch-panel" class="form-control">
+                    <option value="0">Desactivadas</option>
+                    <option value="1">Cada 1 hora</option>
+                    <option value="24">Cada 1 día</option>
+                    <option value="168">Cada 7 días</option>
+                    <option value="360">Cada 15 días</option>
+                    <option value="720">Cada 30 días</option>
                 </select>
                 &nbsp;&nbsp;<label>Borrar copias antiguas&nbsp;</label>
                 <select id="pb-ret" class="form-control">
@@ -131,7 +134,8 @@
 })();
 
 var pbView = { type: 'overview' };
-var pbNextRun = null;
+var pbNextRunNodes = null;
+var pbNextRunPanel = null;
 var pbOffset = 0;
 var pbWasActive = false;
 
@@ -208,7 +212,8 @@ function pbRenderJob(j) {
         }
     }
     if (j) {
-        pbNextRun = j.next_run || null;
+        pbNextRunNodes = j.next_run_nodes || null;
+        pbNextRunPanel = j.next_run_panel || null;
         if (j.server_now) pbOffset = j.server_now - Date.now();
     }
 }
@@ -217,16 +222,22 @@ function pbPollJob() {
     pbApi('/api/job').then(pbRenderJob).catch(function () {});
 }
 
-function pbCountdown() {
-    var el = document.getElementById('pb-countdown');
-    if (!el) return;
-    if (!pbNextRun) { el.textContent = ''; return; }
-    var s = Math.max(0, Math.floor((pbNextRun - (Date.now() + pbOffset)) / 1000));
+function pbFmtDur(target) {
+    var s = Math.max(0, Math.floor((target - (Date.now() + pbOffset)) / 1000));
     var d = Math.floor(s / 86400); s -= d * 86400;
     var h = Math.floor(s / 3600); s -= h * 3600;
     var m = Math.floor(s / 60); s -= m * 60;
     function pad(n) { return String(n).padStart(2, '0'); }
-    el.textContent = 'Próxima copia automática en ' + (d ? d + 'd ' : '') + pad(h) + 'h ' + pad(m) + 'm ' + pad(s) + 's';
+    return (d ? d + 'd ' : '') + pad(h) + 'h ' + pad(m) + 'm ' + pad(s) + 's';
+}
+
+function pbCountdown() {
+    var el = document.getElementById('pb-countdown');
+    if (!el) return;
+    var parts = [];
+    if (pbNextRunNodes) parts.push('Nodos en ' + pbFmtDur(pbNextRunNodes));
+    if (pbNextRunPanel) parts.push('Panel en ' + pbFmtDur(pbNextRunPanel));
+    el.textContent = parts.join('  ·  ');
 }
 
 function pbCancel() {
@@ -410,17 +421,17 @@ function pbDeleteBk(id) {
 function pbLoadSchedule() {
     pbApi('/api/schedule').then(function (d) {
         if (!d.ok) return;
-        document.getElementById('pb-sch').value = String(d.schedule_hours || '0');
-        document.getElementById('pb-target').value = String(d.backup_target || 'both');
+        document.getElementById('pb-sch-nodes').value = String(d.schedule_hours_nodes || '0');
+        document.getElementById('pb-sch-panel').value = String(d.schedule_hours_panel || '0');
         document.getElementById('pb-ret').value = String(d.retention_hours || '0');
     });
 }
 
 function pbSaveSchedule() {
     pbApi('/api/schedule', 'POST', {
-        schedule_hours: document.getElementById('pb-sch').value,
-        retention_hours: document.getElementById('pb-ret').value,
-        backup_target: document.getElementById('pb-target').value
+        schedule_hours_nodes: document.getElementById('pb-sch-nodes').value,
+        schedule_hours_panel: document.getElementById('pb-sch-panel').value,
+        retention_hours: document.getElementById('pb-ret').value
     }).then(function (d) {
         alert(d.ok ? 'Programación guardada.' : ('Error: ' + d.message));
         pbPollJob();

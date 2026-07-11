@@ -1,7 +1,8 @@
 // src/backup.js - El corazón del sistema (versión 2):
 // - Copias por NODO agrupadas en "fechas de copia" (snapshots)
 // - Copias de la BD de VARIOS paneles, guardadas por separado
-// - Excluye node_modules y package-lock.json de los .zip (pesan mucho)
+// - Excluye node_modules, package-lock.json, .npm, .cache, .git, tmp y logs
+//   de los .zip (pesan mucho y no aportan a una copia de seguridad)
 // - Cancelación de la tarea en curso
 require('dotenv').config();
 const fs = require('fs');
@@ -22,7 +23,15 @@ const VOLUMES_PATH = '/var/lib/pterodactyl/volumes';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Lo que NUNCA entra en los .zip: se regenera solo y pesa muchísimo
-const ZIP_EXCLUDES = '-x "node_modules/*" -x "*/node_modules/*" -x "package-lock.json" -x "*/package-lock.json"';
+const ZIP_EXCLUDES = [
+  '-x "node_modules/*"', '-x "*/node_modules/*"',
+  '-x "package-lock.json"', '-x "*/package-lock.json"',
+  '-x ".npm/*"', '-x "*/.npm/*"',
+  '-x ".cache/*"', '-x "*/.cache/*"',
+  '-x ".git/*"', '-x "*/.git/*"',
+  '-x "tmp/*"', '-x "*/tmp/*"',
+  '-x "*.log"'
+].join(' ');
 
 // ---------------------------------------------------------------------------
 // Estado de la tarea actual (se emite en tiempo real por Socket.IO)

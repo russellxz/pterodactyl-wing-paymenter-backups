@@ -59,11 +59,24 @@ const wrap = (fn) => (req, res) =>
   });
 
 // Cuándo toca la próxima copia automática (timestamp en ms) o null si está apagada
+function scheduleParts() {
+  // Devuelve los ajustes con compatibilidad hacia el ajuste único anterior.
+  const nodesH = parseInt(getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')), 10) || 0;
+  const panelH = parseInt(getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')), 10) || 0;
+  const nodesLast = parseInt(getSetting('last_auto_run_nodes', getSetting('last_auto_run', '0')), 10) || Date.now();
+  const panelLast = parseInt(getSetting('last_auto_run_panel', getSetting('last_auto_run', '0')), 10) || Date.now();
+  return {
+    nodesH, panelH,
+    next_run_nodes: nodesH ? nodesLast + nodesH * 3600 * 1000 : null,
+    next_run_panel: panelH ? panelLast + panelH * 3600 * 1000 : null,
+  };
+}
+
 function nextAutoRun() {
-  const hours = parseInt(getSetting('schedule_hours', '0'), 10);
-  if (!hours) return null;
-  const last = parseInt(getSetting('last_auto_run', '0'), 10) || Date.now();
-  return last + hours * 3600 * 1000;
+  // El "próximo" general es el más cercano de los dos (para compatibilidad).
+  const p = scheduleParts();
+  const times = [p.next_run_nodes, p.next_run_panel].filter(Boolean);
+  return times.length ? Math.min(...times) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +390,8 @@ router.post('/restore-panel', requirePerm('restore_backups'), (req, res) => {
 // API de estado: progreso + próxima copia automática
 // ---------------------------------------------------------------------------
 router.get('/api/job', (req, res) => {
-  res.json({ ...backup.job, next_run: nextAutoRun(), server_now: Date.now() });
+  const p = scheduleParts();
+  res.json({ ...backup.job, next_run: nextAutoRun(), next_run_nodes: p.next_run_nodes, next_run_panel: p.next_run_panel, server_now: Date.now() });
 });
 
 router.post('/api/job/cancel', (req, res) => {
@@ -395,7 +409,8 @@ router.get('/settings', requirePerm('manage_settings'), (req, res) => {
   res.render('settings', {
     title: 'Configuración',
     active: 'settings',
-    scheduleHours: getSetting('schedule_hours', '0'),
+    scheduleHoursNodes: getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')),
+    scheduleHoursPanel: getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')),
     retentionHours: getSetting('retention_hours', '0'),
     backupTarget: getSetting('backup_target', 'both'),
     extApiKey: getSetting('ext_api_key', ''),
@@ -413,10 +428,17 @@ router.post('/settings/regen-key', requirePerm('manage_settings'), (req, res) =>
 
 router.post('/settings', requirePerm('manage_settings'), (req, res) => {
   const valid = ['0', '1', '24', '168', '360', '720'];
-  setSetting('schedule_hours', valid.includes(req.body.schedule_hours) ? req.body.schedule_hours : '0');
+  const prevNodes = getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0'));
+  const prevPanel = getSetting('schedule_hours_panel', getSetting('schedule_hours', '0'));
+  const newNodes = valid.includes(req.body.schedule_hours_nodes) ? req.body.schedule_hours_nodes : '0';
+  const newPanel = valid.includes(req.body.schedule_hours_panel) ? req.body.schedule_hours_panel : '0';
+  setSetting('schedule_hours_nodes', newNodes);
+  setSetting('schedule_hours_panel', newPanel);
   setSetting('retention_hours', valid.includes(req.body.retention_hours) ? req.body.retention_hours : '0');
-  setSetting('backup_target', ['both', 'nodes', 'panel'].includes(req.body.backup_target) ? req.body.backup_target : 'both');
-  setSetting('last_auto_run', Date.now()); // el contador empieza desde ahora
+  // Cada contador se reinicia solo si su intervalo cambió (para no reiniciar el otro).
+  const now = String(Date.now());
+  if (newNodes !== prevNodes) setSetting('last_auto_run_nodes', now);
+  if (newPanel !== prevPanel) setSetting('last_auto_run_panel', now);
   logger.info(`Configuración actualizada por ${req.session.admin.email}.`);
   go(res, '/settings', 'Configuración guardada.');
 });

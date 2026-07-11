@@ -48,7 +48,8 @@
   // -------------------------------------------------------------------------
   // Contador en tiempo real de la próxima copia automática
   // -------------------------------------------------------------------------
-  var nextRun = null;
+  var nextRunNodes = null;
+  var nextRunPanel = null;
   var serverOffset = 0; // diferencia entre el reloj del servidor y el del navegador
 
   function fmtDur(ms) {
@@ -63,9 +64,23 @@
   function updateCountdown() {
     var chip = el('auto-chip');
     if (!chip) return;
-    if (!nextRun) { chip.hidden = true; return; }
+    var now = Date.now() + serverOffset;
+    var showNodes = !!nextRunNodes;
+    var showPanel = !!nextRunPanel;
+    if (!showNodes && !showPanel) { chip.hidden = true; return; }
     chip.hidden = false;
-    el('auto-countdown').textContent = fmtDur(nextRun - (Date.now() + serverOffset));
+    var nodesSpan = el('auto-nodes');
+    var panelSpan = el('auto-panel');
+    var sep = el('auto-sep');
+    if (nodesSpan) {
+      nodesSpan.hidden = !showNodes;
+      if (showNodes) el('auto-countdown-nodes').textContent = fmtDur(nextRunNodes - now);
+    }
+    if (panelSpan) {
+      panelSpan.hidden = !showPanel;
+      if (showPanel) el('auto-countdown-panel').textContent = fmtDur(nextRunPanel - now);
+    }
+    if (sep) sep.hidden = !(showNodes && showPanel);
   }
   setInterval(updateCountdown, 1000);
 
@@ -76,7 +91,8 @@
   function applyState(data) {
     if (!data) return;
     renderJob(data);
-    nextRun = data.next_run || null;
+    nextRunNodes = data.next_run_nodes || null;
+    nextRunPanel = data.next_run_panel || null;
     if (data.server_now) serverOffset = data.server_now - Date.now();
     updateCountdown();
   }

@@ -1,18 +1,20 @@
 # PteroBackups
 
-Remote **backup** web system for [Pterodactyl](https://pterodactyl.io/). It is installed on a separate VPS and, by connecting through SSH, it backs up:
+Remote **backup** web system for [Pterodactyl](https://pterodactyl.io/) and [Paymenter](https://paymenter.org/). It is installed on a separate VPS and, by connecting through SSH, it backs up:
 
 - The **full panel database** (`mysqldump`) + the **`.env`** file (essential for reinstalls).
+- The **full Paymenter database** (`mysqldump`) + its **`.env`** file, with its own automatic-backup timer.
 - The **files of each server on each node (Wings)**, one `.zip` per server, named with the **owner’s first name, last name, and email** and the **server name**, so you can find them instantly with the search bar.
 
-Everything is managed from a web page with a dark design, professional icons, real-time progress, and error logs.
+Everything is managed from a web page with a dark, mobile-friendly design, professional icons, real-time progress, and error logs.
 
 ## Features
 
 - **Manual** backups (“Make backup now” button) and **automatic** backups (every 1 hour, 1, 7, 15, or 30 days).
+- **Separate timers** for the nodes, the panel database, and the Paymenter database: each one with its own interval and its own real-time counter, so they do not run on the same day or at the same hour.
 - **Real-time search** by name, email, or server.
 - **Download** any backup from the web.
-- **Restore** a specific server, **all at once**, or the **panel database** (to the same VPS or to a new one).
+- **Restore** a specific server, **all at once**, the **panel database**, or the **Paymenter database** (to the same VPS or to a new one).
 - **Automatic deletion** of old backups (configurable retention).
 - **Administrators with customizable permissions**.
 - **Real-time progress** and live **logs** page.
@@ -44,8 +46,9 @@ Everything is managed from a web page with a dark design, professional icons, re
 | **System VPS** (where you install this page) | Clean Ubuntu 22.04 or 24.04 and a domain added to Cloudflare |
 | **Pterodactyl panel VPS** | SSH access with password + `zip` and `unzip` |
 | **Each node (Wings)** | SSH access with password + `zip` and `unzip` |
+| **Paymenter VPS** (optional, if you use Paymenter) | SSH access with password + `zip` and `unzip` |
 
-On the **panel VPS** and on **each node**, run this (installs the tools to compress and decompress backups):
+On the **panel VPS**, on **each node**, and on the **Paymenter VPS**, run this (installs the tools to compress and decompress backups):
 
 ```bash
 sudo apt update && sudo apt install -y zip unzip
@@ -243,12 +246,13 @@ sudo ufw allow 'Nginx Full'
 
 1. **Nodes and Panels → Add panel.** Enter a name, the panel VPS IP, its SSH password, and the database details. Those details are in the `/var/www/pterodactyl/.env` file **of the panel**: `DB_USERNAME` (user), `DB_PASSWORD` (password), and `DB_DATABASE` (name, usually `panel`). You can view them with `cat /var/www/pterodactyl/.env` on the panel VPS. Click **Test connection**. You can add **multiple panels**.
 2. **Nodes and Panels → Add node.** For each node (Wings): a name, its IP, its SSH password, and **which panel it belongs to**. With the pencil icon you can edit any node or panel later (for example, to change the SSH password).
-3. **Settings.** Choose how often automatic backups are made, what gets backed up, and when old backups are deleted. With automatic backups enabled, you will see a **real-time counter** at the top showing how long until the next one.
-4. **Backups.** Each run creates a **backup date** inside each node: enter the node → choose the date → there you will find all servers with their owner and email, with a search bar, to **download**, **restore** one, or **restore the whole date** (server files only: the panel database is never touched). The **panel database** backups are in their own section with their own restore button (to the same panel or to another VPS). While a backup is running you can **cancel it**, and the progress stays visible even if you reload the page. The .zip files exclude `node_modules` and `package-lock.json`.
-5. **Administrators.** Create more admins by selecting only the permissions you want to give them.
-6. **Logs.** All activity and errors, in real time.
+3. **Nodes and Panels → Add Paymenter** (if you use [Paymenter](https://paymenter.org/) as your billing panel). Enter a name, the Paymenter VPS IP, its SSH password, and its database details, which are in `/var/www/paymenter/.env` **on the Paymenter VPS**: `DB_USERNAME` (user, usually `paymenter`), `DB_PASSWORD` (password), and `DB_DATABASE` (name, usually `paymenter`). Click **Test connection**. You can add **multiple installations**. On the Paymenter VPS also install `zip` and `unzip`.
+4. **Settings.** Choose how often automatic backups are made — the **nodes**, the **panel database**, and the **Paymenter database** each have **their own timer**, so you can schedule them on different days or hours — and when old backups are deleted. With automatic backups enabled, you will see **real-time counters** at the top showing how long until each one.
+5. **Backups.** Each run creates a **backup date** inside each node: enter the node → choose the date → there you will find all servers with their owner and email, with a search bar, to **download**, **restore** one, or **restore the whole date** (server files only: the panel database is never touched). The **panel database** backups and the **Paymenter database** backups are each in their own section, with their own **download** and **restore** buttons (to the same VPS or to a new one). While a backup is running you can **cancel it**, and the progress stays visible even if you reload the page. The .zip files exclude `node_modules` and `package-lock.json`.
+6. **Administrators.** Create more admins by selecting only the permissions you want to give them.
+7. **Logs.** All activity and errors, in real time.
 
-Backups are stored in `storage/backups/` inside the project (servers in `servers/`, database in `panel/`, and `.env` copies in `panel/env/`).
+Backups are stored in `storage/backups/` inside the project (servers in `servers/`, panel database in `panel/` with its `.env` copies in `panel/env/`, and Paymenter database in `paymenter/` with its `.env` copies in `paymenter/env/`).
 
 ---
 

@@ -1,8 +1,8 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Nodos y Paneles</h1>
-  <p>Conecta tus paneles de Pterodactyl y tus nodos (Wings) por SSH. Puedes editar cualquiera para cambiar su IP o contraseña.</p>
+  <h1>Nodos, Paneles y Paymenter</h1>
+  <p>Conecta tus paneles de Pterodactyl, tus nodos (Wings) y tus instalaciones de Paymenter por SSH. Puedes editar cualquiera para cambiar su IP o contraseña.</p>
 </header>
 
 <section class="card">
@@ -51,6 +51,57 @@
     <label>Ruta del archivo .env<input name="env_path" value="/var/www/pterodactyl/.env"></label>
     <div class="form-actions">
       <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar panel</button>
+    </div>
+  </form>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2><i data-lucide="credit-card"></i>Paymenter (panel de facturación)</h2>
+  <p class="muted">Cada instalación de Paymenter sirve para copiar su base de datos + archivo <code>.env</code> por SSH. Los datos de la BD están en <code>/var/www/paymenter/.env</code> del VPS de Paymenter (<code>DB_USERNAME</code>, <code>DB_PASSWORD</code> y <code>DB_DATABASE</code>, normalmente <code>paymenter</code> / <code>paymenter</code>). Puedes agregar varias instalaciones.</p>
+
+  <% if (paymenters.length) { %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>IP</th><th>BD</th><th>Acciones</th></tr></thead>
+      <tbody>
+        <% paymenters.forEach(pm => { %>
+        <tr>
+          <td><b><%= pm.name %></b></td>
+          <td><%= pm.host %>:<%= pm.ssh_port %></td>
+          <td class="muted"><%= pm.db_name %> (<%= pm.db_user %>)</td>
+          <td class="row-actions">
+            <% if (can('manage_nodes')) { %>
+            <button class="btn btn-sm" type="button" onclick="testConnection('/paymenters/<%= pm.id %>/test', this)" title="Probar conexión"><i data-lucide="plug-zap"></i></button>
+            <button class="btn btn-sm" type="button" onclick="openDialog('paymenter-edit-<%= pm.id %>')" title="Editar / cambiar contraseñas"><i data-lucide="pencil"></i></button>
+            <form method="post" action="/paymenters/<%= pm.id %>/delete" class="inline" data-confirm="¿Eliminar el Paymenter &quot;<%= pm.name %>&quot;? Sus copias guardadas se conservan.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar Paymenter"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay instalaciones de Paymenter. Agrega la primera aquí abajo.</p>
+  <% } %>
+
+  <% if (can('manage_nodes')) { %>
+  <h3 class="sub-title">Agregar Paymenter</h3>
+  <form method="post" action="/paymenters" class="form-grid">
+    <label>Nombre<input name="name" required placeholder="Paymenter principal"></label>
+    <label>IP del VPS de Paymenter<input name="host" required placeholder="203.0.113.40"></label>
+    <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
+    <label>Usuario SSH<input name="ssh_user" value="root"></label>
+    <label>Contraseña SSH<input name="ssh_password" type="password" required placeholder="Contraseña SSH"></label>
+    <label>Usuario de la BD<input name="db_user" value="paymenter"></label>
+    <label>Contraseña de la BD<input name="db_password" type="password" required placeholder="Contraseña de la base de datos"></label>
+    <label>Nombre de la BD<input name="db_name" value="paymenter"></label>
+    <label>Ruta del archivo .env<input name="env_path" value="/var/www/paymenter/.env"></label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar Paymenter</button>
     </div>
   </form>
   <% } %>
@@ -111,6 +162,30 @@
 </section>
 
 <% if (can('manage_nodes')) { %>
+  <%# ----- Modales de edición de Paymenter ----- %>
+  <% paymenters.forEach(pm => { %>
+  <dialog id="paymenter-edit-<%= pm.id %>" class="modal">
+    <form method="post" action="/paymenters/<%= pm.id %>/update" class="form">
+      <h2><i data-lucide="pencil"></i>Editar Paymenter: <%= pm.name %></h2>
+      <div class="form-grid">
+        <label>Nombre<input name="name" required value="<%= pm.name %>"></label>
+        <label>IP<input name="host" required value="<%= pm.host %>"></label>
+        <label>Puerto SSH<input name="ssh_port" type="number" value="<%= pm.ssh_port %>"></label>
+        <label>Usuario SSH<input name="ssh_user" value="<%= pm.ssh_user %>"></label>
+        <label>Nueva contraseña SSH<input name="ssh_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
+        <label>Usuario de la BD<input name="db_user" value="<%= pm.db_user %>"></label>
+        <label>Nueva contraseña de la BD<input name="db_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
+        <label>Nombre de la BD<input name="db_name" value="<%= pm.db_name %>"></label>
+        <label>Ruta del archivo .env<input name="env_path" value="<%= pm.env_path %>"></label>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar cambios</button>
+      </div>
+    </form>
+  </dialog>
+  <% }) %>
+
   <%# ----- Modales de edición de paneles ----- %>
   <% panels.forEach(p => { %>
   <dialog id="panel-edit-<%= p.id %>" class="modal">

@@ -17,7 +17,9 @@ const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, '..', 'storage
 const SERVER_DIR = path.join(BACKUP_DIR, 'servers');
 const PANEL_DIR = path.join(BACKUP_DIR, 'panel');
 const ENV_DIR = path.join(PANEL_DIR, 'env'); // copias sueltas del archivo .env de cada panel
-[SERVER_DIR, PANEL_DIR, ENV_DIR].forEach((d) => fs.mkdirSync(d, { recursive: true }));
+const PAYMENTER_DIR = path.join(BACKUP_DIR, 'paymenter');
+const PAYMENTER_ENV_DIR = path.join(PAYMENTER_DIR, 'env'); // copias sueltas del .env de Paymenter
+[SERVER_DIR, PANEL_DIR, ENV_DIR, PAYMENTER_DIR, PAYMENTER_ENV_DIR].forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
 const VOLUMES_PATH = '/var/lib/pterodactyl/volumes';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -101,8 +103,18 @@ function getPanel(id) {
   return db.prepare('SELECT * FROM panels WHERE id = ?').get(id) || null;
 }
 
+function getPaymenters() {
+  return db.prepare('SELECT * FROM paymenters ORDER BY id').all();
+}
+
+function getPaymenter(id) {
+  return db.prepare('SELECT * FROM paymenters WHERE id = ?').get(id) || null;
+}
+
 function backupFilePath(b) {
-  return path.join(b.type === 'panel_db' ? PANEL_DIR : SERVER_DIR, b.filename);
+  if (b.type === 'panel_db') return path.join(PANEL_DIR, b.filename);
+  if (b.type === 'paymenter_db') return path.join(PAYMENTER_DIR, b.filename);
+  return path.join(SERVER_DIR, b.filename);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,8 +238,48 @@ async function backupPanelDb(p) {
 }
 
 // ---------------------------------------------------------------------------
+// Copia de la base de datos de UN Paymenter (mysqldump) + su archivo .env
+// (misma mecánica que la BD del panel, pero en su propia carpeta y tipo)
+// ---------------------------------------------------------------------------
+async function backupPaymenterDb(pm) {
+  setJob({ message: `Copiando la base de datos de Paymenter "${pm.name}"...` });
+  const base = `pb_paymenter_${Date.now()}`;
+  const remoteSql = `/tmp/${base}.sql`;
+  const remoteEnv = `/tmp/${base}.env`;
+  const remoteZip = `/tmp/${base}.zip`;
+  const dbPass = decrypt(pm.db_password);
+
+  await withConn(panelSsh(pm), async (conn) => {
+    await exec(
+      conn,
+      `mysqldump -h 127.0.0.1 -u ${sq(pm.db_user)} -p${sq(dbPass)} --single-transaction --routines --triggers ${sq(pm.db_name)} > ${sq(remoteSql)}`
+    );
+    const hasEnv = (await exec(conn, `if cp ${sq(pm.env_path)} ${sq(remoteEnv)} 2>/dev/null; then echo OK; else echo NO; fi`)).trim() === 'OK';
+    await exec(conn, `cd /tmp && zip -jq ${sq(remoteZip)} ${sq(remoteSql)} ${hasEnv ? sq(remoteEnv) : ''}`);
+
+    const filename = `paymenter_db__${sanitize(pm.name)}__${stamp()}.zip`;
+    await download(conn, remoteZip, path.join(PAYMENTER_DIR, filename));
+    if (hasEnv) {
+      await download(conn, remoteEnv, path.join(PAYMENTER_ENV_DIR, `env_${sanitize(pm.name)}_${stamp()}.env`)).catch(() => {});
+    } else {
+      logger.warn(`Paymenter "${pm.name}": no se encontró el archivo .env en ${pm.env_path}.`);
+    }
+    await exec(conn, `rm -f ${sq(remoteSql)} ${sq(remoteEnv)} ${sq(remoteZip)}`).catch(() => {});
+
+    const size = fs.statSync(path.join(PAYMENTER_DIR, filename)).size;
+    db.prepare(`
+      INSERT INTO backups (type, paymenter_id, server_name, owner_name, owner_email, filename, size)
+      VALUES ('paymenter_db', ?, ?, '—', '—', ?, ?)
+    `).run(pm.id, `BD de Paymenter: ${pm.name}`, filename, size);
+    logger.info(`Copia de la BD de Paymenter "${pm.name}" creada (${filename}).`);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Tarea principal: hacer copias (manual o automática)
-// target: 'both' | 'nodes' | 'panel'  — opts.nodeId / opts.panelId opcionales
+// target: 'all' | 'both' | 'nodes' | 'panel' | 'paymenter'
+// ('both' se mantiene como nodos + BD de paneles; 'all' añade también Paymenter)
+// opts.nodeId / opts.panelId / opts.paymenterId opcionales
 // ---------------------------------------------------------------------------
 async function runBackup(opts = {}) {
   if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine o cancélala.');
@@ -235,7 +287,7 @@ async function runBackup(opts = {}) {
   setJob({ active: true, name: 'Copia de seguridad', message: 'Iniciando...', current: 0, total: 0, cancelRequested: false, target_uuid: null });
   try {
     // 1) Bases de datos de los paneles (cada una por separado)
-    if (target === 'panel' || target === 'both') {
+    if (target === 'panel' || target === 'both' || target === 'all') {
       const panels = opts.panelId ? [getPanel(opts.panelId)].filter(Boolean) : getPanels();
       if (!panels.length) logger.warn('No hay paneles configurados para copiar su base de datos.');
       setJob({ total: job.total + panels.length });
@@ -250,8 +302,25 @@ async function runBackup(opts = {}) {
       }
     }
 
+    // 1b) Bases de datos de Paymenter (cada una por separado). No interfiere
+    //     con la lógica del panel ni de los nodos: es un bloque aparte.
+    if (target === 'paymenter' || target === 'all') {
+      const paymenters = opts.paymenterId ? [getPaymenter(opts.paymenterId)].filter(Boolean) : getPaymenters();
+      if (!paymenters.length) logger.warn('No hay instalaciones de Paymenter configuradas para copiar su base de datos.');
+      setJob({ total: job.total + paymenters.length });
+      for (const pm of paymenters) {
+        if (job.cancelRequested) break;
+        try {
+          await backupPaymenterDb(pm);
+        } catch (e) {
+          logger.error(`Error en la copia de la BD de Paymenter "${pm.name}": ${e.message}`);
+        }
+        setJob({ current: job.current + 1 });
+      }
+    }
+
     // 2) Archivos de los servidores de cada nodo (una fecha de copia por nodo)
-    if (target === 'nodes' || target === 'both') {
+    if (target === 'nodes' || target === 'both' || target === 'all') {
       const nodes = opts.nodeId
         ? [db.prepare('SELECT * FROM nodes WHERE id = ?').get(opts.nodeId)].filter(Boolean)
         : db.prepare('SELECT * FROM nodes').all();
@@ -412,6 +481,53 @@ async function restorePanelDb(backupId, target = null) {
 }
 
 // ---------------------------------------------------------------------------
+// Restaurar la BD de un Paymenter (al Paymenter de la copia o a otro VPS)
+// ---------------------------------------------------------------------------
+async function restorePaymenterDb(backupId, target = null) {
+  const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'paymenter_db'").get(backupId);
+  if (!b) throw new Error('La copia de la base de datos de Paymenter no existe.');
+  const localPath = backupFilePath(b);
+  if (!fs.existsSync(localPath)) throw new Error('El archivo .zip ya no existe en el disco.');
+  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+
+  let cfg, dbUser, dbPass, dbName, label;
+  if (target && target.host) {
+    cfg = { host: target.host, port: target.ssh_port || 22, user: target.ssh_user || 'root', password: target.ssh_password };
+    dbUser = target.db_user || 'paymenter';
+    dbPass = target.db_password;
+    dbName = target.db_name || 'paymenter';
+    label = target.host;
+  } else {
+    const pm = (b.paymenter_id && getPaymenter(b.paymenter_id)) || getPaymenters()[0];
+    if (!pm) throw new Error('El Paymenter de esta copia ya no está configurado. Usa la opción "Otro VPS" con sus datos.');
+    cfg = panelSsh(pm);
+    dbUser = pm.db_user;
+    dbPass = decrypt(pm.db_password);
+    dbName = pm.db_name;
+    label = `${pm.name} (${pm.host})`;
+  }
+
+  setJob({ active: true, name: 'Restauración de BD Paymenter', message: `Restaurando BD de Paymenter en ${label}...`, current: 0, total: 1, cancelRequested: false });
+  try {
+    await withConn(cfg, async (conn) => {
+      const dir = `/tmp/pb_pmrestore_${Date.now()}`;
+      const remoteZip = `${dir}.zip`;
+      await upload(conn, localPath, remoteZip);
+      await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
+      await exec(
+        conn,
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "El zip no contiene un .sql" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+      );
+      await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
+    });
+    setJob({ current: 1 });
+    logger.info(`Base de datos de Paymenter restaurada en ${label}. El .zip también incluye el archivo .env de Paymenter por si necesitas restaurarlo a mano (por ejemplo a /var/www/paymenter/.env). Recuerda limpiar cachés de Paymenter si algo no cuadra: php artisan optimize:clear.`);
+  } finally {
+    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Eliminar copias y fechas de copia
 // ---------------------------------------------------------------------------
 function deleteBackup(id) {
@@ -461,11 +577,14 @@ module.exports = {
   backupFilePath,
   getPanels,
   getPanel,
+  getPaymenters,
+  getPaymenter,
   runBackup,
   requestCancel,
   restoreServer,
   restoreSnapshot,
   restorePanelDb,
+  restorePaymenterDb,
   deleteBackup,
   deleteSnapshot,
   cleanupOld,

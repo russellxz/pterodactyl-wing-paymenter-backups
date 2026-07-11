@@ -63,19 +63,22 @@ function scheduleParts() {
   // Devuelve los ajustes con compatibilidad hacia el ajuste único anterior.
   const nodesH = parseInt(getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')), 10) || 0;
   const panelH = parseInt(getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')), 10) || 0;
+  const paymenterH = parseInt(getSetting('schedule_hours_paymenter', '0'), 10) || 0;
   const nodesLast = parseInt(getSetting('last_auto_run_nodes', getSetting('last_auto_run', '0')), 10) || Date.now();
   const panelLast = parseInt(getSetting('last_auto_run_panel', getSetting('last_auto_run', '0')), 10) || Date.now();
+  const paymenterLast = parseInt(getSetting('last_auto_run_paymenter', '0'), 10) || Date.now();
   return {
-    nodesH, panelH,
+    nodesH, panelH, paymenterH,
     next_run_nodes: nodesH ? nodesLast + nodesH * 3600 * 1000 : null,
     next_run_panel: panelH ? panelLast + panelH * 3600 * 1000 : null,
+    next_run_paymenter: paymenterH ? paymenterLast + paymenterH * 3600 * 1000 : null,
   };
 }
 
 function nextAutoRun() {
-  // El "próximo" general es el más cercano de los dos (para compatibilidad).
+  // El "próximo" general es el más cercano de todos (para compatibilidad).
   const p = scheduleParts();
-  const times = [p.next_run_nodes, p.next_run_panel].filter(Boolean);
+  const times = [p.next_run_nodes, p.next_run_panel, p.next_run_paymenter].filter(Boolean);
   return times.length ? Math.min(...times) : null;
 }
 
@@ -133,13 +136,17 @@ router.use(requireLogin);
 // Dashboard
 // ---------------------------------------------------------------------------
 router.get('/', (req, res) => {
+  const sched = scheduleParts();
   const stats = {
     nodes: db.prepare('SELECT COUNT(*) AS c FROM nodes').get().c,
     panels: db.prepare('SELECT COUNT(*) AS c FROM panels').get().c,
+    paymenters: db.prepare('SELECT COUNT(*) AS c FROM paymenters').get().c,
     backups: db.prepare('SELECT COUNT(*) AS c FROM backups').get().c,
     size: db.prepare('SELECT COALESCE(SUM(size),0) AS s FROM backups').get().s,
     last: db.prepare('SELECT created_at FROM backups ORDER BY id DESC LIMIT 1').get(),
-    scheduleHours: parseInt(getSetting('schedule_hours', '0'), 10),
+    scheduleHoursNodes: sched.nodesH,
+    scheduleHoursPanel: sched.panelH,
+    scheduleHoursPaymenter: sched.paymenterH,
     retentionHours: parseInt(getSetting('retention_hours', '0'), 10),
   };
   const nodes = db.prepare('SELECT id, name FROM nodes').all();
@@ -210,16 +217,79 @@ router.post('/panels/:id/test', requirePerm('manage_nodes'), wrap(async (req, re
 }));
 
 // ---------------------------------------------------------------------------
+// Paymenter (puede haber varias instalaciones)
+// ---------------------------------------------------------------------------
+router.post('/paymenters', requirePerm('manage_nodes'), (req, res) => {
+  const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
+  if (!name || !host || !ssh_password || !db_password) {
+    return go(res, '/nodes', null, 'Nombre, IP, contraseña SSH y contraseña de la BD son obligatorios.');
+  }
+  db.prepare(`
+    INSERT INTO paymenters (name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
+    encrypt(ssh_password), (db_user || 'paymenter').trim(), encrypt(db_password),
+    (db_name || 'paymenter').trim(), (env_path || '/var/www/paymenter/.env').trim()
+  );
+  logger.info(`Paymenter agregado: "${name}" (${host}).`);
+  go(res, '/nodes', `Paymenter "${name}" agregado.`);
+});
+
+router.post('/paymenters/:id/update', requirePerm('manage_nodes'), (req, res) => {
+  const pm = db.prepare('SELECT * FROM paymenters WHERE id = ?').get(req.params.id);
+  if (!pm) return go(res, '/nodes', null, 'El Paymenter no existe.');
+  const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
+  if (!name || !host) return go(res, '/nodes', null, 'El nombre y la IP son obligatorios.');
+  db.prepare(`
+    UPDATE paymenters SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?
+    WHERE id=?
+  `).run(
+    name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
+    ssh_password ? encrypt(ssh_password) : pm.ssh_password,
+    (db_user || 'paymenter').trim(),
+    db_password ? encrypt(db_password) : pm.db_password,
+    (db_name || 'paymenter').trim(), (env_path || '/var/www/paymenter/.env').trim(),
+    pm.id
+  );
+  logger.info(`Paymenter actualizado: "${name}" (por ${req.session.admin.email}).`);
+  go(res, '/nodes', `Paymenter "${name}" actualizado.`);
+});
+
+router.post('/paymenters/:id/delete', requirePerm('manage_nodes'), (req, res) => {
+  const pm = db.prepare('SELECT * FROM paymenters WHERE id = ?').get(req.params.id);
+  if (!pm) return go(res, '/nodes', null, 'El Paymenter no existe.');
+  db.prepare('DELETE FROM paymenters WHERE id = ?').run(pm.id);
+  logger.info(`Paymenter eliminado: "${pm.name}" (sus copias guardadas se conservan).`);
+  go(res, '/nodes', `Paymenter "${pm.name}" eliminado.`);
+});
+
+router.post('/paymenters/:id/test', requirePerm('manage_nodes'), wrap(async (req, res) => {
+  const pm = db.prepare('SELECT * FROM paymenters WHERE id = ?').get(req.params.id);
+  if (!pm) return res.json({ ok: false, message: 'El Paymenter no existe.' });
+  try {
+    const out = await withConn(
+      { host: pm.host, port: pm.ssh_port, user: pm.ssh_user, password: decrypt(pm.ssh_password) },
+      (conn) => exec(conn, `mysql -N -B -h 127.0.0.1 -u ${sq(pm.db_user)} -p${sq(decrypt(pm.db_password))} ${sq(pm.db_name)} -e ${sq('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')}`)
+    );
+    res.json({ ok: true, message: `Conexión correcta con "${pm.name}". Tablas en la base de datos: ${out.trim()}.` });
+  } catch (e) {
+    res.json({ ok: false, message: e.message });
+  }
+}));
+
+// ---------------------------------------------------------------------------
 // Nodos
 // ---------------------------------------------------------------------------
 router.get('/nodes', (req, res) => {
   const panels = db.prepare('SELECT * FROM panels ORDER BY id').all();
+  const paymenters = db.prepare('SELECT * FROM paymenters ORDER BY id').all();
   const nodes = db.prepare(`
     SELECT n.*, p.name AS panel_name FROM nodes n
     LEFT JOIN panels p ON p.id = n.panel_id
     ORDER BY n.id
   `).all();
-  res.render('nodes', { title: 'Nodos y Paneles', active: 'nodes', nodes, panels });
+  res.render('nodes', { title: 'Nodos y Paneles', active: 'nodes', nodes, panels, paymenters });
 });
 
 router.post('/nodes', requirePerm('manage_nodes'), (req, res) => {
@@ -291,7 +361,13 @@ router.get('/backups', (req, res) => {
     LEFT JOIN panels p ON p.id = b.panel_id
     WHERE b.type = 'panel_db' ORDER BY b.id DESC LIMIT 300
   `).all();
-  res.render('backups', { title: 'Copias', active: 'backups', nodes, panelBackups });
+  const paymenterBackups = db.prepare(`
+    SELECT b.*, pm.name AS paymenter_name FROM backups b
+    LEFT JOIN paymenters pm ON pm.id = b.paymenter_id
+    WHERE b.type = 'paymenter_db' ORDER BY b.id DESC LIMIT 300
+  `).all();
+  const paymenters = db.prepare('SELECT id, name FROM paymenters ORDER BY id').all();
+  res.render('backups', { title: 'Copias', active: 'backups', nodes, panelBackups, paymenterBackups, paymenters });
 });
 
 // Fechas de copia de UN nodo
@@ -321,7 +397,7 @@ router.get('/snapshots/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/backups/run', requirePerm('run_backups'), (req, res) => {
   if (backup.job.active) return go(res, back(req), null, 'Ya hay una tarea en ejecución.');
-  const target = ['both', 'nodes', 'panel', 'node'].includes(req.body.target) ? req.body.target : 'both';
+  const target = ['all', 'both', 'nodes', 'panel', 'paymenter', 'node'].includes(req.body.target) ? req.body.target : 'both';
   const opts = target === 'node' ? { target: 'nodes', nodeId: parseInt(req.body.node_id, 10) } : { target };
   logger.info(`Copia manual iniciada por ${req.session.admin.email}.`);
   backup.runBackup(opts).catch((e) => logger.error(e.message));
@@ -386,12 +462,42 @@ router.post('/restore-panel', requirePerm('restore_backups'), (req, res) => {
   go(res, '/backups', 'Restauración de la base de datos iniciada. Mira el progreso arriba.');
 });
 
+// Restaurar la BD de Paymenter (al Paymenter de la copia o a otro VPS)
+router.post('/restore-paymenter', requirePerm('restore_backups'), (req, res) => {
+  const id = parseInt(req.body.backup_id, 10);
+  let target = null;
+  if (req.body.mode === 'custom') {
+    target = {
+      host: String(req.body.host || '').trim(),
+      ssh_port: parseInt(req.body.ssh_port, 10) || 22,
+      ssh_user: (req.body.ssh_user || 'root').trim(),
+      ssh_password: req.body.ssh_password,
+      db_user: (req.body.db_user || 'paymenter').trim(),
+      db_password: req.body.db_password,
+      db_name: (req.body.db_name || 'paymenter').trim(),
+    };
+    if (!target.host || !target.ssh_password || !target.db_password) {
+      return go(res, '/backups', null, 'Para restaurar a otro VPS necesitas IP, contraseña SSH y contraseña de la BD.');
+    }
+  }
+  logger.info(`Restauración de la BD de Paymenter iniciada por ${req.session.admin.email}.`);
+  backup.restorePaymenterDb(id, target).catch((e) => logger.error(e.message));
+  go(res, '/backups', 'Restauración de la base de datos de Paymenter iniciada. Mira el progreso arriba.');
+});
+
 // ---------------------------------------------------------------------------
 // API de estado: progreso + próxima copia automática
 // ---------------------------------------------------------------------------
 router.get('/api/job', (req, res) => {
   const p = scheduleParts();
-  res.json({ ...backup.job, next_run: nextAutoRun(), next_run_nodes: p.next_run_nodes, next_run_panel: p.next_run_panel, server_now: Date.now() });
+  res.json({
+    ...backup.job,
+    next_run: nextAutoRun(),
+    next_run_nodes: p.next_run_nodes,
+    next_run_panel: p.next_run_panel,
+    next_run_paymenter: p.next_run_paymenter,
+    server_now: Date.now(),
+  });
 });
 
 router.post('/api/job/cancel', (req, res) => {
@@ -411,6 +517,7 @@ router.get('/settings', requirePerm('manage_settings'), (req, res) => {
     active: 'settings',
     scheduleHoursNodes: getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')),
     scheduleHoursPanel: getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')),
+    scheduleHoursPaymenter: getSetting('schedule_hours_paymenter', '0'),
     retentionHours: getSetting('retention_hours', '0'),
     backupTarget: getSetting('backup_target', 'both'),
     extApiKey: getSetting('ext_api_key', ''),
@@ -430,15 +537,19 @@ router.post('/settings', requirePerm('manage_settings'), (req, res) => {
   const valid = ['0', '1', '24', '168', '360', '720'];
   const prevNodes = getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0'));
   const prevPanel = getSetting('schedule_hours_panel', getSetting('schedule_hours', '0'));
+  const prevPaymenter = getSetting('schedule_hours_paymenter', '0');
   const newNodes = valid.includes(req.body.schedule_hours_nodes) ? req.body.schedule_hours_nodes : '0';
   const newPanel = valid.includes(req.body.schedule_hours_panel) ? req.body.schedule_hours_panel : '0';
+  const newPaymenter = valid.includes(req.body.schedule_hours_paymenter) ? req.body.schedule_hours_paymenter : '0';
   setSetting('schedule_hours_nodes', newNodes);
   setSetting('schedule_hours_panel', newPanel);
+  setSetting('schedule_hours_paymenter', newPaymenter);
   setSetting('retention_hours', valid.includes(req.body.retention_hours) ? req.body.retention_hours : '0');
-  // Cada contador se reinicia solo si su intervalo cambió (para no reiniciar el otro).
+  // Cada contador se reinicia solo si su intervalo cambió (para no reiniciar los otros).
   const now = String(Date.now());
   if (newNodes !== prevNodes) setSetting('last_auto_run_nodes', now);
   if (newPanel !== prevPanel) setSetting('last_auto_run_panel', now);
+  if (newPaymenter !== prevPaymenter) setSetting('last_auto_run_paymenter', now);
   logger.info(`Configuración actualizada por ${req.session.admin.email}.`);
   go(res, '/settings', 'Configuración guardada.');
 });

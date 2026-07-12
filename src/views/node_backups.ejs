@@ -1,29 +1,29 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Copias del nodo: <%= node.name %></h1>
-  <p><%= node.host %> — Cada fila es una fecha de copia con todos los servidores guardados en esa pasada.</p>
+  <h1>Node backups: <%= node.name %></h1>
+  <p><%= node.host %> — Each row is a backup date holding every server saved in that run.</p>
 </header>
 
 <div class="toolbar">
-  <a class="btn" href="/backups"><i data-lucide="arrow-left"></i>Volver a Copias</a>
+  <a class="btn" href="/backups"><i data-lucide="arrow-left"></i>Back to Backups</a>
   <% if (can('run_backups')) { %>
   <form method="post" action="/backups/run" class="inline">
     <input type="hidden" name="target" value="node">
     <input type="hidden" name="node_id" value="<%= node.id %>">
-    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia de este nodo ahora</button>
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Back up this node now</button>
   </form>
   <% } %>
 </div>
 
 <section class="card">
-  <h2><i data-lucide="calendar"></i>Fechas de copia</h2>
+  <h2><i data-lucide="calendar"></i>Backup dates</h2>
   <% if (snapshots.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Fecha</th><th>Estado</th><th>Servidores</th><th>Tamaño</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Date</th><th>Status</th><th>Servers</th><th>Size</th><th>Actions</th></tr></thead>
       <tbody>
-        <% const ST = { running: ['En curso', 'badge-srv'], complete: ['Completa', 'badge-ok'], canceled: ['Cancelada', 'badge-db'], error: ['Error', 'badge-err'] }; %>
+        <% const ST = { running: ['Running', 'badge-srv'], complete: ['Complete', 'badge-ok'], canceled: ['Canceled', 'badge-db'], error: ['Error', 'badge-err'] }; %>
         <% snapshots.forEach(s => { const st = ST[s.status] || [s.status, 'badge-srv']; %>
         <tr>
           <td><b><%= s.created_at %></b></td>
@@ -31,16 +31,16 @@
           <td><%= s.cnt %></td>
           <td><%= fmtSize(s.total_size) %></td>
           <td class="row-actions">
-            <a class="btn btn-sm" href="/snapshots/<%= s.id %>" title="Ver los servidores de esta fecha"><i data-lucide="eye"></i>Ver copia</a>
+            <a class="btn btn-sm" href="/snapshots/<%= s.id %>" title="View the servers of this date"><i data-lucide="eye"></i>View backup</a>
             <% if (can('restore_backups')) { %>
-            <form method="post" action="/snapshots/<%= s.id %>/restore" class="inline" data-confirm="¿Restaurar TODOS los servidores de la fecha <%= s.created_at %> al nodo? (La BD del panel NO se toca)." data-wipe-ask="1">
+            <form method="post" action="/snapshots/<%= s.id %>/restore" class="inline" data-confirm="Restore ALL servers of the <%= s.created_at %> date to the node? (The panel database is NOT touched)." data-wipe-ask="1">
               <input type="hidden" name="wipe" value="0">
-              <button class="btn btn-sm btn-warn" type="submit" title="Restaurar toda esta fecha"><i data-lucide="history"></i></button>
+              <button class="btn btn-sm btn-warn" type="submit" title="Restore this whole date"><i data-lucide="history"></i></button>
             </form>
             <% } %>
             <% if (can('delete_backups')) { %>
-            <form method="post" action="/snapshots/<%= s.id %>/delete" class="inline" data-confirm="¿Eliminar la fecha <%= s.created_at %> con sus <%= s.cnt %> copias? No se puede deshacer.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar esta fecha"><i data-lucide="trash-2"></i></button>
+            <form method="post" action="/snapshots/<%= s.id %>/delete" class="inline" data-confirm="Delete the <%= s.created_at %> date with its <%= s.cnt %> backups? This cannot be undone.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete this date"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -50,7 +50,7 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Este nodo todavía no tiene fechas de copia. Usa "Hacer copia de este nodo ahora".</p>
+  <p class="empty"><i data-lucide="inbox"></i>This node has no backup dates yet. Use "Back up this node now".</p>
   <% } %>
 </section>
 

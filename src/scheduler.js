@@ -12,9 +12,9 @@ const backup = require('./backup');
 const logger = require('./logger');
 
 const KINDS = {
-  nodes: { scheduleKey: 'schedule_hours_nodes', lastKey: 'last_auto_run_nodes', target: 'nodes', label: 'los nodos' },
-  panel: { scheduleKey: 'schedule_hours_panel', lastKey: 'last_auto_run_panel', target: 'panel', label: 'la base de datos del panel' },
-  paymenter: { scheduleKey: 'schedule_hours_paymenter', lastKey: 'last_auto_run_paymenter', target: 'paymenter', label: 'la base de datos de Paymenter' },
+  nodes: { scheduleKey: 'schedule_hours_nodes', lastKey: 'last_auto_run_nodes', target: 'nodes', label: 'the nodes' },
+  panel: { scheduleKey: 'schedule_hours_panel', lastKey: 'last_auto_run_panel', target: 'panel', label: 'the panel database' },
+  paymenter: { scheduleKey: 'schedule_hours_paymenter', lastKey: 'last_auto_run_paymenter', target: 'paymenter', label: 'the Paymenter database' },
 };
 
 function intervalFor(kind) {
@@ -50,11 +50,11 @@ async function runKind(kind) {
   const k = KINDS[kind];
   setSetting(k.lastKey, String(Date.now()));
 
-  logger.info(`Iniciando copia automática de ${k.label} (cada ${hours} horas)...`);
+  logger.info(`Starting automatic backup of ${k.label} (every ${hours} hours)...`);
   try {
     await backup.runBackup({ target: k.target });
   } catch (e) {
-    logger.error(`Copia automática (${kind}): ${e.message}`);
+    logger.error(`Automatic backup (${kind}): ${e.message}`);
   }
 }
 
@@ -62,7 +62,7 @@ async function tick() {
   try {
     backup.cleanupOld();
   } catch (e) {
-    logger.error(`Limpieza automática: ${e.message}`);
+    logger.error(`Automatic cleanup: ${e.message}`);
   }
 
   // Se comprueban por separado. Si varias tocan a la vez, corre la primera

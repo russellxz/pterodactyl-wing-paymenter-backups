@@ -1,44 +1,51 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0e1320">
   <title><%= title %> · PteroBackups</title>
+  <link rel="icon" type="image/png" href="https://cdn.russellxz.click/d4cf1cbf.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
-<%# Barra superior SOLO para móvil: marca + botón de menú %>
+<%# Top bar (mobile only): logo + menu button %>
 <header class="topbar">
-  <button class="menu-btn" type="button" onclick="toggleMenu()" aria-label="Abrir el menú">
+  <button class="menu-btn" type="button" onclick="toggleMenu()" aria-label="Open menu">
     <i data-lucide="menu"></i>
   </button>
   <div class="brand topbar-brand">
-    <span class="brand-mark"><i data-lucide="database-backup"></i></span>
+    <img class="brand-logo" src="https://cdn.russellxz.click/d4cf1cbf.png" alt="PteroBackups logo">
     <span class="brand-name">Ptero<b>Backups</b></span>
   </div>
-  <a class="logout" href="/logout" title="Cerrar sesión"><i data-lucide="log-out"></i></a>
+  <a class="logout" href="/logout" title="Sign out"><i data-lucide="log-out"></i></a>
 </header>
 <div class="sidebar-backdrop" onclick="toggleMenu(false)"></div>
 
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <span class="brand-mark"><i data-lucide="database-backup"></i></span>
-      <span class="brand-name">Ptero<b>Backups</b></span>
+      <img class="brand-logo" src="https://cdn.russellxz.click/d4cf1cbf.png" alt="PteroBackups logo">
+      <div class="brand-text">
+        <span class="brand-name">Ptero<b>Backups</b></span>
+        <span class="brand-tag">Pterodactyl &amp; Paymenter</span>
+      </div>
     </div>
     <nav class="nav">
-      <a href="/" class="<%= active === 'dash' ? 'active' : '' %>"><i data-lucide="layout-dashboard"></i><span>Inicio</span></a>
-      <a href="/backups" class="<%= active === 'backups' ? 'active' : '' %>"><i data-lucide="archive"></i><span>Copias</span></a>
-      <a href="/nodes" class="<%= active === 'nodes' ? 'active' : '' %>"><i data-lucide="server"></i><span>Nodos y Paneles</span></a>
+      <a href="/" class="<%= active === 'dash' ? 'active' : '' %>"><i data-lucide="layout-dashboard"></i><span>Home</span></a>
+      <a href="/backups" class="<%= active === 'backups' ? 'active' : '' %>"><i data-lucide="archive"></i><span>Backups</span></a>
+      <span class="nav-group">Connections</span>
+      <a href="/nodes" class="<%= active === 'nodes' ? 'active' : '' %>"><i data-lucide="server"></i><span>Pterodactyl</span></a>
+      <a href="/paymenter" class="nav-paymenter <%= active === 'paymenter' ? 'active' : '' %>"><i data-lucide="credit-card"></i><span>Paymenter</span></a>
+      <span class="nav-group">System</span>
       <% if (can('manage_settings')) { %>
-      <a href="/settings" class="<%= active === 'settings' ? 'active' : '' %>"><i data-lucide="settings"></i><span>Configuración</span></a>
+      <a href="/settings" class="<%= active === 'settings' ? 'active' : '' %>"><i data-lucide="settings"></i><span>Settings</span></a>
       <% } %>
       <% if (can('manage_admins')) { %>
-      <a href="/admins" class="<%= active === 'admins' ? 'active' : '' %>"><i data-lucide="users"></i><span>Administradores</span></a>
+      <a href="/admins" class="<%= active === 'admins' ? 'active' : '' %>"><i data-lucide="users"></i><span>Administrators</span></a>
       <% } %>
       <% if (can('view_logs')) { %>
       <a href="/logs" class="<%= active === 'logs' ? 'active' : '' %>"><i data-lucide="file-text"></i><span>Logs</span></a>
@@ -49,10 +56,10 @@
         <i data-lucide="circle-user"></i>
         <div>
           <div class="me-name"><%= admin.first_name %> <%= admin.last_name %></div>
-          <div class="me-role"><%= admin.is_root ? 'Admin raíz' : 'Admin' %></div>
+          <div class="me-role"><%= admin.is_root ? 'Root admin' : 'Admin' %></div>
         </div>
       </div>
-      <a class="logout" href="/logout" title="Cerrar sesión"><i data-lucide="log-out"></i></a>
+      <a class="logout" href="/logout" title="Sign out"><i data-lucide="log-out"></i></a>
     </div>
   </aside>
 

@@ -2,22 +2,22 @@
 
 <header class="page-head">
   <h1>Logs</h1>
-  <p>Registro de actividad y errores del sistema, en tiempo real.</p>
+  <p>System activity and errors, in real time.</p>
 </header>
 
 <section class="card">
   <div class="toolbar">
-    <span class="muted small">Se muestran los últimos 300 registros. Los nuevos aparecen arriba automáticamente.</span>
+    <span class="muted small">Showing the latest 300 entries. New ones appear at the top automatically.</span>
     <% if (admin.is_root) { %>
-    <form method="post" action="/logs/clear" class="inline" data-confirm="¿Vaciar todos los registros?">
-      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Vaciar logs</button>
+    <form method="post" action="/logs/clear" class="inline" data-confirm="Clear all log entries?">
+      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Clear logs</button>
     </form>
     <% } %>
   </div>
 
   <div class="logbox" id="logbox">
     <% if (!logs.length) { %>
-    <p class="empty"><i data-lucide="inbox"></i>Todavía no hay registros.</p>
+    <p class="empty"><i data-lucide="inbox"></i>No log entries yet.</p>
     <% } %>
     <% logs.forEach(l => { %>
     <div class="log-line log-<%= l.level %>">

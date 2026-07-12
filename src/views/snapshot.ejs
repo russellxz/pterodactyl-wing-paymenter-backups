@@ -1,22 +1,22 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Copia del <%= snap.created_at %></h1>
-  <p>Nodo: <b><%= node ? node.name : 'Nodo eliminado' %></b> — <%= rows.length %> servidores guardados en esta fecha.</p>
+  <h1>Backup from <%= snap.created_at %></h1>
+  <p>Node: <b><%= node ? node.name : 'Deleted node' %></b> — <%= rows.length %> servers saved on this date.</p>
 </header>
 
 <div class="toolbar">
-  <a class="btn" href="<%= node ? '/nodes/' + node.id + '/backups' : '/backups' %>"><i data-lucide="arrow-left"></i>Volver a las fechas</a>
+  <a class="btn" href="<%= node ? '/nodes/' + node.id + '/backups' : '/backups' %>"><i data-lucide="arrow-left"></i>Back to dates</a>
   <div class="toolbar-actions">
     <% if (can('restore_backups')) { %>
-    <form method="post" action="/snapshots/<%= snap.id %>/restore" class="inline" data-confirm="¿Restaurar TODOS los servidores de esta fecha al nodo? (La BD del panel NO se toca)." data-wipe-ask="1">
+    <form method="post" action="/snapshots/<%= snap.id %>/restore" class="inline" data-confirm="Restore ALL servers of this date to the node? (The panel database is NOT touched)." data-wipe-ask="1">
       <input type="hidden" name="wipe" value="0">
-      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar toda esta fecha</button>
+      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore this whole date</button>
     </form>
     <% } %>
     <% if (can('delete_backups')) { %>
-    <form method="post" action="/snapshots/<%= snap.id %>/delete" class="inline" data-confirm="¿Eliminar esta fecha completa con sus <%= rows.length %> copias? No se puede deshacer.">
-      <button class="btn btn-danger" type="submit"><i data-lucide="trash-2"></i>Eliminar esta fecha</button>
+    <form method="post" action="/snapshots/<%= snap.id %>/delete" class="inline" data-confirm="Delete this whole date with its <%= rows.length %> backups? This cannot be undone.">
+      <button class="btn btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete this date</button>
     </form>
     <% } %>
   </div>
@@ -26,7 +26,7 @@
   <div class="toolbar">
     <div class="search">
       <i data-lucide="search"></i>
-      <input id="search" type="search" placeholder="Buscar por nombre, correo o servidor..." oninput="filterTable()">
+      <input id="search" type="search" placeholder="Search by name, email or server..." oninput="filterTable()">
     </div>
   </div>
 
@@ -34,7 +34,7 @@
   <div class="table-wrap">
     <table id="backups-table">
       <thead>
-        <tr><th>Usuario</th><th>Correo</th><th>Servidor</th><th>Tamaño</th><th>Acciones</th></tr>
+        <tr><th>Owner</th><th>Email</th><th>Server</th><th>Size</th><th>Actions</th></tr>
       </thead>
       <tbody>
         <% rows.forEach(b => { %>
@@ -45,17 +45,17 @@
           <td><%= fmtSize(b.size) %></td>
           <td class="row-actions">
             <% if (can('download_backups')) { %>
-            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
+            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
             <% } %>
             <% if (can('restore_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="¿Restaurar &quot;<%= b.server_name %>&quot; a su nodo? Los archivos de la copia sobrescribirán los actuales." data-wipe-ask="1">
+            <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones." data-wipe-ask="1">
               <input type="hidden" name="wipe" value="0">
-              <button class="btn btn-sm" type="submit" title="Restaurar este servidor"><i data-lucide="history"></i></button>
+              <button class="btn btn-sm" type="submit" title="Restore this server"><i data-lucide="history"></i></button>
             </form>
             <% } %>
             <% if (can('delete_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar la copia de &quot;<%= b.server_name %>&quot;? No se puede deshacer.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="Delete the backup of &quot;<%= b.server_name %>&quot;? This cannot be undone.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -65,7 +65,7 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Esta fecha no tiene servidores guardados.</p>
+  <p class="empty"><i data-lucide="inbox"></i>This date has no saved servers.</p>
   <% } %>
 </section>
 

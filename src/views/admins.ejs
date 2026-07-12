@@ -1,44 +1,44 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Administradores</h1>
-  <p>Crea otros administradores y decide exactamente qué puede hacer cada uno.</p>
+  <h1>Administrators</h1>
+  <p>Create other administrators and decide exactly what each one can do.</p>
 </header>
 
 <section class="card">
-  <h2><i data-lucide="users"></i>Administradores actuales</h2>
+  <h2><i data-lucide="users"></i>Current administrators</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Nombre</th><th>Correo</th><th>Tipo</th><th>Permisos</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead>
       <tbody>
         <% admins.forEach(a => { %>
         <tr>
-          <td><b><%= a.first_name %> <%= a.last_name %></b><%= a.id === admin.id ? ' (tú)' : '' %></td>
+          <td><b><%= a.first_name %> <%= a.last_name %></b><%= a.id === admin.id ? ' (you)' : '' %></td>
           <td class="muted"><%= a.email %></td>
           <td>
-            <% if (a.is_root) { %><span class="badge badge-db"><i data-lucide="shield-check"></i>Raíz</span>
+            <% if (a.is_root) { %><span class="badge badge-db"><i data-lucide="shield-check"></i>Root</span>
             <% } else { %><span class="badge badge-srv"><i data-lucide="shield"></i>Admin</span><% } %>
           </td>
           <td class="muted small">
-            <% if (a.is_root) { %>Todos los permisos<% } else if (a.permissions.length) { %>
+            <% if (a.is_root) { %>All permissions<% } else if (a.permissions.length) { %>
               <%= a.permissions.map(p => { const f = PERMISSIONS.find(x => x[0] === p); return f ? f[1] : p; }).join(', ') %>
-            <% } else { %>Solo lectura<% } %>
+            <% } else { %>Read only<% } %>
           </td>
           <td class="row-actions">
             <% const canTouch = a.id !== admin.id && (!a.is_root || admin.is_root); %>
             <% const canPass = a.id === admin.id || !a.is_root || admin.is_root; %>
             <% if (canPass) { %>
             <details class="inline-details">
-              <summary class="btn btn-sm" title="Cambiar contraseña"><i data-lucide="key-round"></i></summary>
+              <summary class="btn btn-sm" title="Change password"><i data-lucide="key-round"></i></summary>
               <form method="post" action="/admins/<%= a.id %>/password" class="form-inline pass-form">
-                <input type="password" name="password" minlength="8" required placeholder="Nueva contraseña (mín. 8)">
+                <input type="password" name="password" minlength="8" required placeholder="New password (min. 8)">
                 <button class="btn btn-sm btn-primary" type="submit"><i data-lucide="save"></i></button>
               </form>
             </details>
             <% } %>
             <% if (canTouch) { %>
-            <form method="post" action="/admins/<%= a.id %>/delete" class="inline" data-confirm="¿Eliminar al administrador <%= a.email %>? No se puede deshacer.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            <form method="post" action="/admins/<%= a.id %>/delete" class="inline" data-confirm="Delete administrator <%= a.email %>? This cannot be undone.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -47,19 +47,19 @@
       </tbody>
     </table>
   </div>
-  <p class="muted small">Los administradores raíz se crean desde la consola con <code>npm run create-admin</code>, tienen todos los permisos y solo otro raíz puede eliminarlos o cambiarles la contraseña. Si pierdes el acceso, ejecuta ese comando de nuevo con el mismo correo para restablecer la contraseña.</p>
+  <p class="muted small">Root administrators are created from the console with <code>npm run create-admin</code>, have every permission, and only another root can delete them or change their password. If you lose access, run that command again with the same email to reset the password.</p>
 </section>
 
 <section class="card">
-  <h2><i data-lucide="user-plus"></i>Crear administrador</h2>
+  <h2><i data-lucide="user-plus"></i>Create administrator</h2>
   <form method="post" action="/admins" class="form">
     <div class="form-grid">
-      <label>Nombre<input name="first_name" required placeholder="Juan"></label>
-      <label>Apellido<input name="last_name" required placeholder="Pérez"></label>
-      <label>Correo electrónico<input type="email" name="email" required placeholder="juan@ejemplo.com"></label>
-      <label>Contraseña<input type="password" name="password" minlength="8" required placeholder="Mínimo 8 caracteres"></label>
+      <label>First name<input name="first_name" required placeholder="John"></label>
+      <label>Last name<input name="last_name" required placeholder="Doe"></label>
+      <label>Email address<input type="email" name="email" required placeholder="john@example.com"></label>
+      <label>Password<input type="password" name="password" minlength="8" required placeholder="At least 8 characters"></label>
     </div>
-    <h3 class="sub-title">Permisos</h3>
+    <h3 class="sub-title">Permissions</h3>
     <div class="perm-grid">
       <% PERMISSIONS.forEach(([key, label]) => { %>
       <label class="check">
@@ -69,7 +69,7 @@
       <% }) %>
     </div>
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit"><i data-lucide="user-plus"></i>Crear administrador</button>
+      <button class="btn btn-primary" type="submit"><i data-lucide="user-plus"></i>Create administrator</button>
     </div>
   </form>
 </section>

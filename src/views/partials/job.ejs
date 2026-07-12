@@ -1,29 +1,29 @@
 <div class="card job-card" id="job-card" hidden>
   <div class="job-head">
     <span class="spinner"></span>
-    <strong id="job-name">Tarea</strong>
+    <strong id="job-name">Task</strong>
     <span class="job-msg" id="job-msg"></span>
     <span class="job-count" id="job-count"></span>
     <% if (can('run_backups')) { %>
-    <button class="btn btn-sm btn-danger" id="job-cancel" type="button" onclick="cancelJob()"><i data-lucide="x-circle"></i>Cancelar</button>
+    <button class="btn btn-sm btn-danger" id="job-cancel" type="button" onclick="cancelJob()"><i data-lucide="x-circle"></i>Cancel</button>
     <% } %>
   </div>
   <div class="progress"><div class="progress-bar" id="job-bar" style="width:0%"></div></div>
 </div>
 
-<%# Contadores en tiempo real de las próximas copias automáticas: cada tipo
-    tiene su propio chip y solo aparece si su programación está activada. %>
+<%# Live countdowns for the next automatic backups: each type has its own
+    chip and only appears when its schedule is enabled. %>
 <div class="auto-chips" id="auto-chips" hidden>
   <span class="auto-chip" id="auto-nodes" hidden>
     <i data-lucide="server"></i>
-    <span class="auto-chip-text">Copia de nodos en <b id="auto-countdown-nodes">—</b></span>
+    <span class="auto-chip-text">Node backup in <b id="auto-countdown-nodes">—</b></span>
   </span>
   <span class="auto-chip" id="auto-panel" hidden>
     <i data-lucide="database"></i>
-    <span class="auto-chip-text">Copia del panel en <b id="auto-countdown-panel">—</b></span>
+    <span class="auto-chip-text">Panel DB backup in <b id="auto-countdown-panel">—</b></span>
   </span>
   <span class="auto-chip auto-chip-pay" id="auto-paymenter" hidden>
     <i data-lucide="credit-card"></i>
-    <span class="auto-chip-text">Copia de Paymenter en <b id="auto-countdown-paymenter">—</b></span>
+    <span class="auto-chip-text">Paymenter DB backup in <b id="auto-countdown-paymenter">—</b></span>
   </span>
 </div>

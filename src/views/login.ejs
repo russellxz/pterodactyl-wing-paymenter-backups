@@ -1,31 +1,48 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Iniciar sesión · PteroBackups</title>
+  <meta name="theme-color" content="#0e1320">
+  <title>Sign in · PteroBackups</title>
+  <link rel="icon" type="image/png" href="https://cdn.russellxz.click/d4cf1cbf.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="login-body">
   <div class="login-card">
-    <div class="brand login-brand">
-      <span class="brand-mark"><i data-lucide="database-backup"></i></span>
-      <span class="brand-name">Ptero<b>Backups</b></span>
+    <div class="login-logo-wrap">
+      <img class="login-logo" src="https://cdn.russellxz.click/d4cf1cbf.png" alt="PteroBackups logo">
     </div>
-    <p class="login-sub">Backups de <b>Pterodactyl</b> &amp; <b>Paymenter</b></p>
+    <h1 class="login-title">Ptero<b>Backups</b></h1>
+    <p class="login-sub">Backup Systems · <span class="w-ptero">Pterodactyl</span> &amp; <span class="w-pay">Paymenter</span></p>
+
     <% if (error) { %><div class="alert alert-err"><i data-lucide="alert-triangle"></i><span><%= error %></span></div><% } %>
-    <form method="post" action="/login" class="form">
-      <label>Correo electrónico
-        <input type="email" name="email" required autocomplete="username" placeholder="admin@ejemplo.com">
+
+    <form method="post" action="/login" class="form login-form">
+      <label>Email address
+        <span class="input-icon">
+          <i data-lucide="mail"></i>
+          <input type="email" name="email" required autocomplete="username" placeholder="admin@example.com">
+        </span>
       </label>
-      <label>Contraseña
-        <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+      <label>Password
+        <span class="input-icon">
+          <i data-lucide="lock"></i>
+          <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </span>
       </label>
-      <button class="btn btn-primary btn-block" type="submit"><i data-lucide="log-in"></i>Entrar</button>
+      <button class="btn btn-primary btn-block btn-login" type="submit"><i data-lucide="log-in"></i>Sign in</button>
     </form>
-    <p class="login-hint">¿Sin cuenta? Pide al administrador que la cree, o crea una raíz desde la consola con <code>npm run create-admin</code>.</p>
+
+    <div class="login-badges">
+      <span class="login-badge"><i data-lucide="server"></i>Nodes</span>
+      <span class="login-badge"><i data-lucide="database"></i>Panel DB</span>
+      <span class="login-badge login-badge-pay"><i data-lucide="credit-card"></i>Paymenter DB</span>
+    </div>
+
+    <p class="login-hint">No account? Ask an administrator to create one, or create a root account from the console with <code>npm run create-admin</code>.</p>
   </div>
   <script src="https://unpkg.com/lucide@0.452.0/dist/umd/lucide.min.js"></script>
   <script>lucide.createIcons();</script>

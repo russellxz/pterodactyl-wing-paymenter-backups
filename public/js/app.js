@@ -242,6 +242,24 @@
     f.submit();
   };
 
+  // Restauración individual: igual que el borrado, el botón está dentro del
+  // form de selección múltiple, así que creo el form al vuelo. Pide
+  // confirmación y después la opción de vaciar los archivos actuales.
+  window.restoreOne = function (action, msg) {
+    if (!window.confirm(msg)) return;
+    var wipe = window.confirm('Do you want to WIPE the server\'s current files before restoring?\n\nOK = wipe and restore clean.\nCancel = restore on top of the current files.');
+    var f = document.createElement('form');
+    f.method = 'post';
+    f.action = action;
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'wipe';
+    input.value = wipe ? '1' : '0';
+    f.appendChild(input);
+    document.body.appendChild(f);
+    f.submit();
+  };
+
   // Evita enviar "Delete selected" sin nada marcado.
   document.addEventListener('submit', function (ev) {
     var form = ev.target;

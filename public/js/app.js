@@ -172,6 +172,20 @@
   // -------------------------------------------------------------------------
   // Selección múltiple de copias (checkboxes + "Delete selected")
   // -------------------------------------------------------------------------
+  // Botón "Select all / Deselect all": marca (o desmarca) todas las filas
+  // visibles. Si ya está todo marcado, el botón desmarca.
+  window.toggleSelectAll = function (btn) {
+    var form = btn.closest('.bulk-form');
+    if (!form) return;
+    var items = Array.prototype.slice.call(form.querySelectorAll('.bulk-item')).filter(function (cb) {
+      var tr = cb.closest('tr');
+      return !tr || tr.style.display !== 'none';
+    });
+    var allChecked = items.length > 0 && items.every(function (cb) { return cb.checked; });
+    items.forEach(function (cb) { cb.checked = !allChecked; });
+    updateBulk();
+  };
+
   function updateBulk() {
     document.querySelectorAll('.bulk-form').forEach(function (form) {
       var items = Array.prototype.slice.call(form.querySelectorAll('.bulk-item'));
@@ -191,6 +205,11 @@
       if (all) {
         all.checked = visible.length > 0 && checked.length === visible.length;
         all.indeterminate = checked.length > 0 && checked.length < visible.length;
+      }
+      // Texto del botón grande: "Select all" o "Deselect all".
+      var label = form.querySelector('.sa-label');
+      if (label) {
+        label.textContent = (visible.length > 0 && checked.length === visible.length) ? 'Deselect all' : 'Select all';
       }
     });
   }

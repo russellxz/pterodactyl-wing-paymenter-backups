@@ -639,11 +639,17 @@ dialog.modal::backdrop { background: rgba(5, 8, 15, 0.7); }
 }
 
 /* ----- Selección múltiple de copias (checkboxes + barra de acción) ----- */
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
 .bulk-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
   padding: 10px 14px;
   background: var(--danger-soft);
   border: 1px solid rgba(229, 101, 110, 0.4);

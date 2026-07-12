@@ -1,6 +1,6 @@
-# PteroBackups
+# PteroBackups — Backup system for Pterodactyl (panel + Wings) and Paymenter
 
-Web-based remote backup system for Pterodactyl. It installs on a separate VPS and, connecting over SSH, makes backups of:
+Web-based remote backup system for Pterodactyl **and** Paymenter — not just the Pterodactyl panel, but also its server nodes (Wings) and your Paymenter billing panel. It installs on a separate VPS and, connecting over SSH, makes backups of:
 
 • The panel's complete database (mysqldump) + the `.env` file (essential for reinstalls).
 • The files of every server on every node (Wings), one `.zip` per server, named with the owner's first name, last name and email plus the server name, so you can find them instantly with the search box.

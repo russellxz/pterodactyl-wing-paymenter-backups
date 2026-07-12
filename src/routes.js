@@ -7,6 +7,7 @@ const { db, getSetting, setSetting } = require('./db');
 const { encrypt, decrypt } = require('./cipher');
 const { withConn, exec, sq } = require('./ssh');
 const backup = require('./backup');
+const scheduler = require('./scheduler');
 const logger = require('./logger');
 
 const router = express.Router();
@@ -67,11 +68,26 @@ function scheduleParts() {
   const nodesLast = parseInt(getSetting('last_auto_run_nodes', getSetting('last_auto_run', '0')), 10) || Date.now();
   const panelLast = parseInt(getSetting('last_auto_run_panel', getSetting('last_auto_run', '0')), 10) || Date.now();
   const paymenterLast = parseInt(getSetting('last_auto_run_paymenter', '0'), 10) || Date.now();
+
+  // Limpieza de copias viejas: no tiene un intervalo largo propio, corre en
+  // cada "tick" del scheduler (cada 2 min) mientras la retención esté activada.
+  // El contador muestra el tiempo hasta la próxima pasada.
+  const retentionH = parseInt(getSetting('retention_hours', '0'), 10) || 0;
+  const cleanupLast = parseInt(getSetting('last_cleanup_run', '0'), 10);
+  let nextCleanup = null;
+  if (retentionH) {
+    const base = cleanupLast || Date.now();
+    nextCleanup = base + scheduler.TICK_MS;
+    // Si ya pasó (p. ej. acaba de activarse), muestra la siguiente pasada.
+    while (nextCleanup < Date.now()) nextCleanup += scheduler.TICK_MS;
+  }
+
   return {
-    nodesH, panelH, paymenterH,
+    nodesH, panelH, paymenterH, retentionH,
     next_run_nodes: nodesH ? nodesLast + nodesH * 3600 * 1000 : null,
     next_run_panel: panelH ? panelLast + panelH * 3600 * 1000 : null,
     next_run_paymenter: paymenterH ? paymenterLast + paymenterH * 3600 * 1000 : null,
+    next_run_cleanup: nextCleanup,
   };
 }
 
@@ -509,6 +525,7 @@ router.get('/api/job', (req, res) => {
     next_run_nodes: p.next_run_nodes,
     next_run_panel: p.next_run_panel,
     next_run_paymenter: p.next_run_paymenter,
+    next_run_cleanup: p.next_run_cleanup,
     server_now: Date.now(),
   });
 });

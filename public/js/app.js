@@ -51,6 +51,7 @@
   var nextRunNodes = null;
   var nextRunPanel = null;
   var nextRunPaymenter = null;
+  var nextRunCleanup = null;
   var serverOffset = 0; // diferencia entre el reloj del servidor y el del navegador
 
   function fmtDur(ms) {
@@ -69,7 +70,8 @@
     var items = [
       { at: nextRunNodes, chip: el('auto-nodes'), num: el('auto-countdown-nodes') },
       { at: nextRunPanel, chip: el('auto-panel'), num: el('auto-countdown-panel') },
-      { at: nextRunPaymenter, chip: el('auto-paymenter'), num: el('auto-countdown-paymenter') }
+      { at: nextRunPaymenter, chip: el('auto-paymenter'), num: el('auto-countdown-paymenter') },
+      { at: nextRunCleanup, chip: el('auto-cleanup'), num: el('auto-countdown-cleanup') }
     ];
     var any = false;
     items.forEach(function (it) {
@@ -95,6 +97,7 @@
     nextRunNodes = data.next_run_nodes || null;
     nextRunPanel = data.next_run_panel || null;
     nextRunPaymenter = data.next_run_paymenter || null;
+    nextRunCleanup = data.next_run_cleanup || null;
     if (data.server_now) serverOffset = data.server_now - Date.now();
     updateCountdown();
   }

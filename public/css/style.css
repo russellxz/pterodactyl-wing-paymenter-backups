@@ -331,6 +331,9 @@ tbody tr:last-child td { border-bottom: none; }
 .auto-chip-pay { border-color: rgba(78, 205, 196, 0.4); }
 .auto-chip-pay svg { color: #6fdcd4; }
 .auto-chip-pay b { color: #6fdcd4; }
+.auto-chip-clean { border-color: rgba(233, 105, 105, 0.4); }
+.auto-chip-clean svg { color: #f28b8b; }
+.auto-chip-clean b { color: #f28b8b; }
 
 /* ----- Barra de herramientas y buscador ----- */
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }

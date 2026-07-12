@@ -54,9 +54,12 @@
   <% if (panelBackups.length) { %>
   <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected panel database backups? This cannot be undone.">
     <% if (can('delete_backups')) { %>
-    <div class="bulk-bar" hidden>
-      <span class="bulk-count"><b>0</b> selected</span>
-      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+    <div class="bulk-toolbar">
+      <button class="btn btn-sm" type="button" onclick="toggleSelectAll(this)"><i data-lucide="check-square"></i><span class="sa-label">Select all</span></button>
+      <div class="bulk-bar" hidden>
+        <span class="bulk-count"><b>0</b> selected</span>
+        <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+      </div>
     </div>
     <% } %>
     <div class="table-wrap">
@@ -100,9 +103,12 @@
   <% if (paymenterBackups.length) { %>
   <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected Paymenter database backups? This cannot be undone.">
     <% if (can('delete_backups')) { %>
-    <div class="bulk-bar" hidden>
-      <span class="bulk-count"><b>0</b> selected</span>
-      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+    <div class="bulk-toolbar">
+      <button class="btn btn-sm" type="button" onclick="toggleSelectAll(this)"><i data-lucide="check-square"></i><span class="sa-label">Select all</span></button>
+      <div class="bulk-bar" hidden>
+        <span class="bulk-count"><b>0</b> selected</span>
+        <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+      </div>
     </div>
     <% } %>
     <div class="table-wrap">

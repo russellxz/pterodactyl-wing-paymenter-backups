@@ -1,128 +1,366 @@
-# PteroBackups
+# PteroBackups — Backup system for Pterodactyl (panel + Wings) and Paymenter
 
-Web system for **remote** backups of [Pterodactyl](https://pterodactyl.io/) and [Paymenter](https://paymenter.org/). It runs on a separate VPS and, connecting over SSH, backs up:
+Web-based remote backup system for Pterodactyl **and** Paymenter — not just the Pterodactyl panel, but also its server nodes (Wings) and your Paymenter billing panel. It installs on a separate VPS and, connecting over SSH, makes backups of:
 
-- The **full panel database** (mysqldump) + the **`.env`** file (essential for reinstalls).
-- The **full Paymenter database** (mysqldump) + its **`.env`** file, on its own automatic-backup timer.
-- The **server files of every node (Wings)**, one `.zip` per server, named after the **owner's first name, last name and email** plus the **server name**, so you can find them instantly with the search box.
+• The panel's complete database (mysqldump) + the `.env` file (essential for reinstalls).
+• The files of every server on every node (Wings), one `.zip` per server, named with the owner's first name, last name and email plus the server name, so you can find them instantly with the search box.
+• The complete Paymenter database (billing panel). This backup can be restored to a remote VPS or to the same one, exactly like the panel database.
 
-Everything is managed from a web page with a dark, mobile-friendly design, professional icons, real-time progress and error logging.
+Everything is managed from a web page with a dark design, professional icons, real-time progress and error logging.
 
 ## Features
 
-- **Manual** backups ("Back up now" button) and **automatic** ones (every 1 hour, 1, 7, 15 or 30 days).
-- **Separate timers** for the nodes, the panel database and the Paymenter database: each with its own interval and its own live countdown, so they never run on the same day or at the same time.
-- **Real-time search** by name, email or server.
-- **Download** any backup from the web.
-- **Restore** a single server, **all of them at once**, the **panel database** or the **Paymenter database** (to the same VPS or a brand-new one).
-- **Automatic deletion** of old backups (configurable retention).
-- **Administrators with customizable permissions**.
-- **Real-time progress** and a live **logs** page.
-- **Pterodactyl panel extension** so panel admins and users can manage/see their own backups from the panel itself.
+• Manual backups ("Back up now" button) and automatic backups (every 1 hour, 1, 7, 15 or 30 days).
+• Real-time search by name, email or server.
+• Download any backup from the web.
+• Restore a specific server, all of them at once, or the panel DB (to the same VPS or a new one).
+• Restore the Paymenter DB to the same VPS or to a new one, just like the panel database.
+• Automatic deletion of old backups (configurable retention).
+• Administrators with customizable permissions.
+• Real-time progress and a live logs page.
+• SSH and DB passwords stored encrypted (AES-256) in a local SQLite database (no database to install: it creates itself in a file).
 
-## The web pages
+The extension for the Pterodactyl panel is included in the `extension/` folder: admins manage all backups from the panel's admin area, and each user views, downloads and restores the backups of THEIR server from a new "Backup 2.0" option in their menu. Compatible with the Arix v2 theme (it does not recompile the panel). Full instructions in `extension/README.md`.
 
-- **Home** — overview: number of nodes, panels, Paymenter installations, stored backups, disk used and the current schedule.
-- **Backups** — node backups organized by date, plus separate sections for panel-database and Paymenter-database backups.
-- **Pterodactyl** — your Pterodactyl panels and nodes (Wings). Add, edit, delete and test each connection.
-- **Paymenter** — a dedicated page for your Paymenter installations, with its own stats, its own "Back up Paymenter now" button and its own schedule. It's completely separate from Pterodactyl.
-- **Settings** — schedule the three timers (nodes, panel DB, Paymenter DB), old-backup cleanup and the panel-extension key.
-- **Administrators** — create admins and choose exactly what each one can do.
-- **Logs** — live system activity and errors.
+───
+
+## Before you start: 2 basics
+
+**What is `sudo`?** It means "run as administrator". If you're already logged in as root, the commands work the same with or without `sudo`.
+
+**What is `nano`?** It's the terminal's text editor. You'll use it several times. Here's how it works:
+
+| Action | Key |
+| --- | --- |
+| Move through the text | Keyboard arrows |
+| Paste copied text | Right click (or Ctrl + Shift + V) |
+| Save | Ctrl + O then Enter |
+| Exit | Ctrl + X |
+
+───
 
 ## Requirements
 
-- A VPS for PteroBackups (Ubuntu/Debian recommended) with **Node.js 18+**.
-- SSH access (IP + password) to: the panel VPS, every node, and the Paymenter VPS.
-- The panel/Paymenter **database credentials** (they're in each `.env` file).
-- `zip` and `unzip` installed **on every node and on the Paymenter VPS**:
-  ```bash
-  sudo apt update && sudo apt install -y zip unzip
-  ```
+| Where | What you need |
+| --- | --- |
+| System VPS (where you install this page) | Clean Ubuntu 22.04 or 24.04 and a domain added to Cloudflare |
+| Pterodactyl panel VPS | SSH access with password + `zip` and `unzip` |
+| Each node (Wings) | SSH access with password + `zip` and `unzip` |
 
-## Installation
+On the panel VPS and on each node, run this (it installs the tools to compress and decompress the backups):
 
 ```bash
-git clone <your-repo-url> pterobackups
-cd pterobackups
-npm install
+sudo apt update && sudo apt install -y zip unzip
 ```
 
-Create a `.env` file in the project root:
+**Important:** the SSH user you use (usually root) must be able to log in with a password. If your VPS only accepts keys, open the configuration with `sudo nano /etc/ssh/sshd_config`, find and set these lines: `PasswordAuthentication yes` and `PermitRootLogin yes`. Save, exit and restart SSH with `sudo systemctl restart ssh`.
 
-```env
-PORT=3500
-HOST=127.0.0.1
-SESSION_SECRET=change_this_for_a_long_random_string
-ENCRYPTION_KEY=a_32_character_key_0123456789abcd
-```
+───
 
-- `ENCRYPTION_KEY` must be **exactly 32 characters** — it encrypts the stored SSH and database passwords.
-- Create the first (root) administrator:
-  ```bash
-  npm run create-admin
-  ```
-- Start it:
-  ```bash
-  npm start
-  ```
+## Step-by-step installation (system VPS)
 
-The app listens on `127.0.0.1:3500`. Put **Nginx** in front of it with your domain and SSL.
-
-### Run it as a service (systemd)
-
-```ini
-# /etc/systemd/system/pterobackups.service
-[Unit]
-Description=PteroBackups
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/pterodactyl-backup
-ExecStart=/usr/bin/node src/server.js
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
+### Step 1 — Install Node.js 22, Git and Nginx
 
 ```bash
-sudo systemctl enable --now pterobackups
+# Update the list of available programs
+sudo apt update
+
+# Install: curl (download things), git (clone the project),
+# build-essential and python3 (needed to compile the database),
+# and nginx (the web server that will show the page)
+sudo apt install -y curl git build-essential python3 nginx
+
+# Add the official Node.js 22 repository (LTS version supported until 2027)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+
+# Install Node.js
+sudo apt install -y nodejs
+
+# Check that it installed correctly: it should show v22.x
+node -v
 ```
 
-## First steps in the web UI
+**Had you already installed Node 18?** Run the first two commands anyway (they replace it with 22) and, if you had already run `npm install` in the project, rebuild the dependencies with: `cd /opt/pterodactyl-wing-paymenter-backups && sudo npm rebuild`
 
-1. **Add your Pterodactyl panel** (Pterodactyl page): the VPS IP, SSH password and database details (`DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` from `/var/www/pterodactyl/.env`). You can add several.
-2. **Add your nodes (Wings)** with their IP and SSH password, choosing which panel each belongs to.
-3. **Using Paymenter?** Add it on the **Paymenter** page with its VPS IP, SSH password and database details (from `/var/www/paymenter/.env`).
-4. **Schedule the backups** (Settings): set each timer and the retention.
-5. **Run your first backup** ("Back up now"). Each run creates a "backup date" inside every node; open it in Backups to download or restore any server.
-
-## Restoring
-
-- **A single server** or **a whole date**: from Backups -> node -> date. You can restore on top of the current files or wipe them first.
-- **The panel database** or **the Paymenter database**: from Backups, using the restore button in each section. You can restore to the **saved VPS** or to **another VPS** (useful for migrations). Each `.zip` also contains the original `.env` file.
-- After restoring a database, if something looks off on Paymenter run `php artisan optimize:clear` on that VPS. After restoring servers whose volumes didn't exist, restart Wings on that node (`systemctl restart wings`).
-
-## Updating
-
-If you already have it installed as a service, updating keeps all your data (the database migrates automatically on startup):
+### Step 2 — Download the project
 
 ```bash
-cd /opt/pterodactyl-backup
-sudo git pull
+# Go into the /opt folder (where programs are usually installed)
+cd /opt
+
+# Download the project from GitHub
+sudo git clone https://github.com/russellxz/pterodactyl-wing-paymenter-backups.git
+
+# Go into the project folder
+cd pterodactyl-wing-paymenter-backups
+
+# Install the project dependencies (takes 1-3 minutes)
 sudo npm install
+```
+
+### Step 3 — Configure the .env file (the secret key)
+
+The `.env` file stores the system's private configuration. The most important thing is `APP_SECRET`: a key that protects login sessions and encrypts the SSH passwords you save. Each installation must have its own.
+
+```bash
+# Create your configuration from the example template
+sudo cp .env.example .env
+
+# Generate a secure random key. COPY the result that appears
+openssl rand -hex 32
+
+# Open the configuration to edit it
+sudo nano .env
+```
+
+Inside nano, find the line that starts with `APP_SECRET=` and delete whatever is after the `=`, then paste your key. It should look something like this:
+
+```
+APP_SECRET=f3a91c0d8b27e6...your_long_key...
+```
+
+Save with Ctrl + O, Enter, and exit with Ctrl + X. You don't need to touch the rest of the file.
+
+### Step 4 — Create your administrator account
+
+```bash
+sudo npm run create-admin
+```
+
+It will ask for first name, last name, email and password (minimum 8 characters). You'll log into the page with that account. Admins created from the console are root: they have every permission. If you ever forget the password, run this same command again with the same email and it will be reset.
+
+### Step 5 — Keep the system always on (systemd)
+
+This makes the page start on its own when the VPS boots and restart if it fails. The service already comes configured for the default installation (`/opt/pterodactyl-wing-paymenter-backups`), nothing needs editing.
+
+```bash
+# Copy the service file into the system
+sudo cp deploy/pterobackups.service /etc/systemd/system/pterobackups.service
+```
+
+**Only if you cloned the project into ANOTHER folder:** open it with `sudo nano /etc/systemd/system/pterobackups.service` and change the `WorkingDirectory=` line to your real path.
+
+Now enable the service:
+
+```bash
+# Reload systemd so it detects the new service
+sudo systemctl daemon-reload
+
+# Enable automatic startup and turn the system on now
+sudo systemctl enable --now pterobackups
+
+# Check that it's running: it should say "active (running)" in green
+sudo systemctl status pterobackups
+```
+
+The app listens only internally on `127.0.0.1:3500`. No one can get in from outside yet: that's what Nginx is for (next step).
+
+───
+
+### Step 6 — Domain in Cloudflare
+
+You need a subdomain for your page, for example `copias.yourdomain.com`.
+
+1. Go to Cloudflare and choose your domain.
+2. Go to DNS → Records → Add record and create:
+   - Type: **A**
+   - Name: **copias** (or whatever name you want)
+   - IPv4 address: the IP of this VPS (the backup system's one)
+   - Proxy status: enabled (orange cloud)
+3. Go to SSL/TLS → Overview and set the mode to **Full (strict)**.
+4. Go to SSL/TLS → Origin Server → Create Certificate:
+   - Leave the default options and press Create.
+   - It will show you two text boxes: the **Origin Certificate** and the **Private Key**. Leave that tab open, you'll copy them in the next step.
+
+### Step 7 — Configure Nginx with the certificate
+
+Nginx is the "front door": it receives visits to `https://copias.yourdomain.com` with the Cloudflare certificate and passes them internally to the app.
+
+**7.1 — Save the Cloudflare certificate on the VPS:**
+
+```bash
+# Create the folder where the certificate and key will live
+sudo mkdir -p /etc/ssl/cloudflare
+
+# Open an empty file for the CERTIFICATE
+sudo nano /etc/ssl/cloudflare/cert.pem
+```
+
+Paste the complete **Origin Certificate** from Cloudflare (from `-----BEGIN CERTIFICATE-----` to `-----END CERTIFICATE-----`). Save and exit.
+
+```bash
+# Open an empty file for the PRIVATE KEY
+sudo nano /etc/ssl/cloudflare/key.pem
+```
+
+Paste the complete **Private Key** (from `-----BEGIN PRIVATE KEY-----` to `-----END PRIVATE KEY-----`). Save and exit.
+
+```bash
+# Protect the private key so only root can read it
+sudo chmod 600 /etc/ssl/cloudflare/key.pem
+```
+
+**7.2 — Put YOUR domain in the Nginx configuration:**
+
+```bash
+# Copy the configuration included in the project
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/pterobackups.conf
+
+# Open it to set your domain
+sudo nano /etc/nginx/sites-available/pterobackups.conf
+```
+
+Inside you'll see two lines that say:
+
+```
+server_name copias.yourdomain.com;
+```
+
+Change `copias.yourdomain.com` to your real subdomain on both lines (one is in the port 80 block and the other in the 443 block). Don't touch anything else. Save and exit.
+
+**7.3 — Enable the site:**
+
+```bash
+# Enable the configuration (creates a "shortcut" in sites-enabled)
+sudo ln -s /etc/nginx/sites-available/pterobackups.conf /etc/nginx/sites-enabled/
+
+# Check there are no syntax errors: it should say "syntax is ok" and "test is successful"
+sudo nginx -t
+
+# Apply the changes
+sudo systemctl reload nginx
+```
+
+**7.4 — (Only if you use the UFW firewall) open the web ports:**
+
+```bash
+sudo ufw allow 'Nginx Full'
+```
+
+Done. Open `https://copias.yourdomain.com` in your browser and log in with the account from Step 4.
+
+───
+
+## Using the page
+
+1. **Nodes and Panels → Add panel.** Type a name, the panel VPS's IP, its SSH password and the database details. Those details are in the panel's `/var/www/pterodactyl/.env` file: `DB_USERNAME` (user), `DB_PASSWORD` (password) and `DB_DATABASE` (name, usually `panel`). You can view them with `cat /var/www/pterodactyl/.env` on the panel VPS. Press Test connection. You can add several panels.
+2. **Nodes and Panels → Add node.** For each node (Wings): a name, its IP, its SSH password and which panel it belongs to. With the pencil you can edit any node or panel afterwards (for example, to change the SSH password).
+3. **Settings.** Choose how often automatic backups run, what gets backed up and when old backups are deleted. With automatic backups active, you'll see a real-time countdown at the top showing the time until the next one.
+4. **Backups.** Each pass creates a backup date inside each node: enter the node → choose the date → there you'll find every server with its owner and email, with a search box, to download, restore one, or restore the whole date (server files only: the panel DB is never touched). The panel DB backups are in their own section with their own restore button (to the same panel or to another VPS). The Paymenter DB backups have their own restore button too, and can be restored to the same VPS or to a new one, exactly like the panel. While a backup is running you can cancel it, and the progress stays visible even if you reload the page. The `.zip` files exclude `node_modules` and `package-lock.json`.
+5. **Administrators.** Create more admins, ticking only the permissions you want to give them.
+6. **Logs.** All activity and errors, in real time.
+
+Backups are saved in `storage/backups/` inside the project (servers in `servers/`, DB in `panel/`, and the `.env` backups in `panel/env/`).
+
+───
+
+## Updating the system when there are new changes
+
+When the repository has improvements, update your VPS like this:
+
+```bash
+# Go into the project folder
+cd /opt/pterodactyl-wing-paymenter-backups
+
+# Download the changes from GitHub
+sudo git pull
+
+# Install new dependencies (if any)
+sudo npm install
+
+# Restart the system to apply the changes
 sudo systemctl restart pterobackups
 ```
 
-## Pterodactyl panel extension
+───
 
-The `extension/` folder contains a Pterodactyl extension so admins can trigger backups and every user can see their own server's backups from the panel. Install it following its own README, then paste the **URL** and **API key** (from Settings) into `https://YOUR-PANEL/admin/pterobackups`.
+## Extension for the Pterodactyl panel (Backup 2.0)
+
+The extension connects your Pterodactyl panel with this backup page:
+
+• **Panel admins:** a new PteroBackups section in the admin area with everything the page has: make backups on the spot, cancel, live progress, countdown to the next automatic backup, backup dates per node, server search by name or email, download, restore, delete and change the schedule.
+• **Users:** a "Backup 2.0" option in their server's sidebar menu to view, download and restore ONLY their server's backups.
+• Compatible with the Arix v2 theme and any other theme: the extension does not recompile the panel (which is what breaks themes), and the menu button copies the design of the active theme.
+
+### Step 1 — Copy the connection details
+
+On this backup page, go to Settings and look for the "Panel extension" card. There you'll find the two details you'll need: the system URL and the API key. Keep them handy (tap them to select and copy them).
+
+### Step 2 — Install the extension on the panel VPS
+
+Connect over SSH to the VPS where the Pterodactyl panel is installed (not the backup system's one, unless you have both on the same VPS) and run:
+
+```bash
+# Go into the /opt folder
+cd /opt
+
+# Download the project (if you already have the folder from before, skip this command)
+sudo git clone https://github.com/russellxz/pterodactyl-wing-paymenter-backups.git
+
+# Go into the extension folder
+cd pterodactyl-wing-paymenter-backups/extension
+
+# Install the extension into the panel
+sudo bash install.sh
+```
+
+The installer copies the pieces into the panel, adds the routes and clears the caches. At the end it prints several lines starting with `OK:` and the message "PteroBackups extension installed successfully".
+
+If your panel is not in the normal folder (`/var/www/pterodactyl`), tell it the path: `sudo bash install.sh /path/to/your/panel`
+
+### Step 3 — Connect the panel with the backup system
+
+1. Open `https://YOUR-PANEL/admin/pterobackups` (PteroBackups also appears in the admin area menu).
+2. Paste the URL and API key from Step 1.
+3. Press Save and test connection. It should say "Connection successful".
+
+Reload the panel with Ctrl + F5, enter any server and you'll see "Backup 2.0" in your server's sidebar menu. The connection is saved in the panel's database: if you ever reinstall the panel with the same DB, just run `install.sh` again and it reconnects on its own.
+
+### Updating the extension when there are changes
+
+```bash
+# On the panel VPS: download the changes and reinstall
+cd /opt/pterodactyl-wing-paymenter-backups
+sudo git pull
+cd extension
+sudo bash install.sh
+```
+
+### Uninstalling or diagnosing
+
+```bash
+# Remove the extension from the panel (the saved connection is kept)
+cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash uninstall.sh
+
+# If something doesn't show up: prints a full diagnostic report
+cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash check.sh
+```
+
+More details and troubleshooting for the extension in `extension/README.md`.
+
+───
+
+## Troubleshooting
+
+• **The page won't load:** check the system with `sudo systemctl status pterobackups` and watch the live errors with `sudo journalctl -u pterobackups -f`. Also check Nginx with `sudo nginx -t`.
+• **Cloudflare 521/522 error:** Nginx is off or the firewall is blocking ports 80/443. Check `sudo systemctl status nginx` and step 7.4.
+• **`npm install` fails on better-sqlite3:** you're missing `build-essential` and `python3` (Step 1).
+• **Test connection fails:** check that you can log in manually with `ssh root@NODE_IP` using that password and that port 22 isn't blocked.
+• **Backups come out as "Unknown":** the panel DB details are wrong; check them in "Nodes and Panel" and use Test connection.
+• **A server is skipped as "empty":** its volume has no files yet; that's normal.
+• **I changed APP_SECRET and nothing connects:** the saved passwords are encrypted with that key; re-enter the node and panel passwords on the web.
 
 ## Security notes
 
-- All SSH and database passwords are stored **encrypted** with `ENCRYPTION_KEY`.
-- Keep the app behind Nginx with SSL and never expose port 3500 directly.
-- Root administrators can only be created from the console (`npm run create-admin`).
+• Use strong SSH passwords and, if you can, limit the nodes' SSH by firewall to this VPS's IP.
+• Don't open port 3500 to the outside: the app only listens on `127.0.0.1` and is served through Nginx over HTTPS.
+• This VPS stores (encrypted) credentials of your other VPSs: protect it just as well as the panel.
+
+## Roadmap
+
+- [x] Phase 1: web page for the backup system.
+- [x] Phase 2: extension for the Pterodactyl panel (`extension/` folder): full management from the admin area, backups viewable/downloadable/restorable by each user on their server, compatible with the Arix v2 theme.
+
+## License
+
+MIT. Use it, modify it and share it freely.

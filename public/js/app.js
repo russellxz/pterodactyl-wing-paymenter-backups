@@ -157,15 +157,93 @@
   window.filterTable = function () {
     var q = (el('search').value || '').toLowerCase().trim();
     document.querySelectorAll('#backups-table tbody tr').forEach(function (tr) {
-      tr.style.display = !q || (tr.dataset.search || '').indexOf(q) !== -1 ? '' : 'none';
+      var hidden = q && (tr.dataset.search || '').indexOf(q) === -1;
+      tr.style.display = hidden ? 'none' : '';
+      // Al ocultar una fila por el buscador, la desmarco para no borrar algo
+      // que ya no ves en pantalla.
+      if (hidden) {
+        var cb = tr.querySelector('.bulk-item');
+        if (cb) cb.checked = false;
+      }
     });
+    updateBulk();
   };
+
+  // -------------------------------------------------------------------------
+  // Selección múltiple de copias (checkboxes + "Delete selected")
+  // -------------------------------------------------------------------------
+  function updateBulk() {
+    document.querySelectorAll('.bulk-form').forEach(function (form) {
+      var items = Array.prototype.slice.call(form.querySelectorAll('.bulk-item'));
+      // Solo cuentan las filas visibles (el buscador puede ocultar algunas).
+      var visible = items.filter(function (cb) {
+        var tr = cb.closest('tr');
+        return !tr || tr.style.display !== 'none';
+      });
+      var checked = visible.filter(function (cb) { return cb.checked; });
+      var bar = form.querySelector('.bulk-bar');
+      if (bar) {
+        bar.hidden = checked.length === 0;
+        var count = bar.querySelector('.bulk-count b');
+        if (count) count.textContent = checked.length;
+      }
+      var all = form.querySelector('.bulk-all');
+      if (all) {
+        all.checked = visible.length > 0 && checked.length === visible.length;
+        all.indeterminate = checked.length > 0 && checked.length < visible.length;
+      }
+    });
+  }
+
+  // Delegación: un click en cualquier checkbox de selección actualiza la barra.
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.classList && t.classList.contains('bulk-all')) {
+      var form = t.closest('.bulk-form');
+      if (form) {
+        form.querySelectorAll('.bulk-item').forEach(function (cb) {
+          var tr = cb.closest('tr');
+          if (!tr || tr.style.display !== 'none') cb.checked = t.checked;
+        });
+      }
+      updateBulk();
+    } else if (t.classList && t.classList.contains('bulk-item')) {
+      updateBulk();
+    }
+  });
+
+  // Borrado individual: como el botón vive dentro del form de selección
+  // múltiple, no puedo anidar otro form. Creo uno al vuelo y lo envío.
+  window.deleteOne = function (btn, action, msg) {
+    if (!window.confirm(msg)) return;
+    var f = document.createElement('form');
+    f.method = 'post';
+    f.action = action;
+    document.body.appendChild(f);
+    f.submit();
+  };
+
+  // Evita enviar "Delete selected" sin nada marcado.
+  document.addEventListener('submit', function (ev) {
+    var form = ev.target;
+    if (form.classList && form.classList.contains('bulk-form')) {
+      var any = form.querySelector('.bulk-item:checked');
+      if (!any) {
+        ev.preventDefault();
+        window.alert('Select at least one backup first.');
+      }
+    }
+  });
 
   // -------------------------------------------------------------------------
   // Confirmaciones (data-confirm) y pregunta extra de vaciado (data-wipe-ask)
   // -------------------------------------------------------------------------
   document.addEventListener('submit', function (ev) {
     var form = ev.target;
+    // Si es borrado múltiple sin nada marcado, ni siquiera preguntamos.
+    if (form.classList && form.classList.contains('bulk-form') && !form.querySelector('.bulk-item:checked')) {
+      return; // el otro manejador ya lo cancela y avisa
+    }
     var msg = form.getAttribute('data-confirm');
     if (!msg) return;
     if (!window.confirm(msg)) {

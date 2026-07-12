@@ -637,3 +637,25 @@ dialog.modal::backdrop { background: rgba(5, 8, 15, 0.7); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ----- Selección múltiple de copias (checkboxes + barra de acción) ----- */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--danger-soft);
+  border: 1px solid rgba(229, 101, 110, 0.4);
+  border-radius: 10px;
+}
+.bulk-count { font-size: 13.5px; color: var(--text); }
+.bulk-count b { color: var(--danger); }
+.col-check { width: 38px; text-align: center; padding-right: 0 !important; }
+.bulk-table input[type="checkbox"] {
+  width: 17px; height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.bulk-table tbody tr:hover { background: var(--surface-2); }

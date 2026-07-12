@@ -62,10 +62,7 @@
               <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
               <% } %>
               <% if (can('restore_backups')) { %>
-              <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones." data-wipe-ask="1">
-                <input type="hidden" name="wipe" value="0">
-                <button class="btn btn-sm" type="submit" title="Restore this server"><i data-lucide="history"></i></button>
-              </form>
+              <button class="btn btn-sm" type="button" title="Restore this server" onclick="restoreOne('/backups/<%= b.id %>/restore', 'Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones.')"><i data-lucide="history"></i></button>
               <% } %>
               <% if (can('delete_backups')) { %>
               <button class="btn btn-sm btn-danger" type="button" title="Delete" onclick="deleteOne(this, '/backups/<%= b.id %>/delete', 'Delete the backup of &quot;<%= b.server_name %>&quot;? This cannot be undone.')"><i data-lucide="trash-2"></i></button>

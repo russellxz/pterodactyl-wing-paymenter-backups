@@ -31,39 +31,49 @@
   </div>
 
   <% if (rows.length) { %>
-  <div class="table-wrap">
-    <table id="backups-table">
-      <thead>
-        <tr><th>Owner</th><th>Email</th><th>Server</th><th>Size</th><th>Actions</th></tr>
-      </thead>
-      <tbody>
-        <% rows.forEach(b => { %>
-        <tr data-search="<%= (b.owner_name + ' ' + b.owner_email + ' ' + b.server_name + ' ' + b.filename).toLowerCase() %>">
-          <td><%= b.owner_name %></td>
-          <td class="muted"><%= b.owner_email %></td>
-          <td><b><%= b.server_name %></b></td>
-          <td><%= fmtSize(b.size) %></td>
-          <td class="row-actions">
-            <% if (can('download_backups')) { %>
-            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
-            <% } %>
-            <% if (can('restore_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones." data-wipe-ask="1">
-              <input type="hidden" name="wipe" value="0">
-              <button class="btn btn-sm" type="submit" title="Restore this server"><i data-lucide="history"></i></button>
-            </form>
-            <% } %>
-            <% if (can('delete_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="Delete the backup of &quot;<%= b.server_name %>&quot;? This cannot be undone.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i data-lucide="trash-2"></i></button>
-            </form>
-            <% } %>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
+  <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected server backups? This cannot be undone.">
+    <% if (can('delete_backups')) { %>
+    <div class="bulk-bar" hidden>
+      <span class="bulk-count"><b>0</b> selected</span>
+      <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+    </div>
+    <% } %>
+    <div class="table-wrap">
+      <table id="backups-table" class="bulk-table">
+        <thead>
+          <tr>
+            <% if (can('delete_backups')) { %><th class="col-check"><input type="checkbox" class="bulk-all" title="Select all visible"></th><% } %>
+            <th>Owner</th><th>Email</th><th>Server</th><th>Size</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(b => { %>
+          <tr data-search="<%= (b.owner_name + ' ' + b.owner_email + ' ' + b.server_name + ' ' + b.filename).toLowerCase() %>">
+            <% if (can('delete_backups')) { %><td class="col-check"><input type="checkbox" class="bulk-item" name="ids" value="<%= b.id %>"></td><% } %>
+            <td><%= b.owner_name %></td>
+            <td class="muted"><%= b.owner_email %></td>
+            <td><b><%= b.server_name %></b></td>
+            <td><%= fmtSize(b.size) %></td>
+            <td class="row-actions">
+              <% if (can('download_backups')) { %>
+              <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
+              <% } %>
+              <% if (can('restore_backups')) { %>
+              <form method="post" action="/backups/<%= b.id %>/restore" class="inline" data-confirm="Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones." data-wipe-ask="1">
+                <input type="hidden" name="wipe" value="0">
+                <button class="btn btn-sm" type="submit" title="Restore this server"><i data-lucide="history"></i></button>
+              </form>
+              <% } %>
+              <% if (can('delete_backups')) { %>
+              <button class="btn btn-sm btn-danger" type="button" title="Delete" onclick="deleteOne(this, '/backups/<%= b.id %>/delete', 'Delete the backup of &quot;<%= b.server_name %>&quot;? This cannot be undone.')"><i data-lucide="trash-2"></i></button>
+              <% } %>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </form>
   <% } else { %>
   <p class="empty"><i data-lucide="inbox"></i>This date has no saved servers.</p>
   <% } %>

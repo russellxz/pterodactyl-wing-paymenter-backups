@@ -447,6 +447,19 @@ router.post('/backups/:id/delete', requirePerm('delete_backups'), wrap(async (re
   go(res, back(req), 'Backup deleted.');
 }));
 
+// Borrado en lote: recibe una lista de ids (ids=1&ids=2&...) y los elimina todos.
+router.post('/backups/delete-many', requirePerm('delete_backups'), wrap(async (req, res) => {
+  let ids = req.body.ids || [];
+  if (!Array.isArray(ids)) ids = [ids]; // un solo checkbox llega como string
+  ids = ids.map((x) => parseInt(x, 10)).filter((x) => !isNaN(x));
+  let deleted = 0;
+  for (const id of ids) {
+    try { backup.deleteBackup(id); deleted++; } catch (e) { /* ya no existe, seguir */ }
+  }
+  if (deleted) logger.info(`${deleted} backups deleted in bulk by ${req.session.admin.email}.`);
+  go(res, back(req), deleted ? `${deleted} backup(s) deleted.` : null, deleted ? null : 'No backups were selected.');
+}));
+
 router.post('/backups/:id/restore', requirePerm('restore_backups'), (req, res) => {
   const wipe = req.body.wipe === '1';
   logger.info(`Server restore started by ${req.session.admin.email} (backup #${req.params.id}).`);

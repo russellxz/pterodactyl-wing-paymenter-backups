@@ -7,7 +7,6 @@ const { db, getSetting, setSetting } = require('./db');
 const { encrypt, decrypt } = require('./cipher');
 const { withConn, exec, sq } = require('./ssh');
 const backup = require('./backup');
-const scheduler = require('./scheduler');
 const logger = require('./logger');
 
 const router = express.Router();
@@ -69,17 +68,18 @@ function scheduleParts() {
   const panelLast = parseInt(getSetting('last_auto_run_panel', getSetting('last_auto_run', '0')), 10) || Date.now();
   const paymenterLast = parseInt(getSetting('last_auto_run_paymenter', '0'), 10) || Date.now();
 
-  // Limpieza de copias viejas: no tiene un intervalo largo propio, corre en
-  // cada "tick" del scheduler (cada 2 min) mientras la retención esté activada.
-  // El contador muestra el tiempo hasta la próxima pasada.
+  // Limpieza de copias viejas: la retención define la antigüedad máxima de una
+  // copia (p. ej. 168h = 7 días). El contador muestra cuándo le toca ser
+  // borrada a la copia MÁS ANTIGUA = su fecha + la antigüedad de retención.
   const retentionH = parseInt(getSetting('retention_hours', '0'), 10) || 0;
-  const cleanupLast = parseInt(getSetting('last_cleanup_run', '0'), 10);
   let nextCleanup = null;
   if (retentionH) {
-    const base = cleanupLast || Date.now();
-    nextCleanup = base + scheduler.TICK_MS;
-    // Si ya pasó (p. ej. acaba de activarse), muestra la siguiente pasada.
-    while (nextCleanup < Date.now()) nextCleanup += scheduler.TICK_MS;
+    const oldest = db.prepare("SELECT MIN(created_at) AS m FROM backups").get();
+    if (oldest && oldest.m) {
+      // created_at está en hora local ('YYYY-MM-DD HH:MM:SS'); lo interpreto como local.
+      const t = new Date(oldest.m.replace(' ', 'T')).getTime();
+      if (!isNaN(t)) nextCleanup = t + retentionH * 3600 * 1000;
+    }
   }
 
   return {

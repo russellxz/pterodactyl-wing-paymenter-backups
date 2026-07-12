@@ -58,16 +58,9 @@ async function runKind(kind) {
   }
 }
 
-const TICK_MS = 2 * 60 * 1000; // el cron corre cada 2 minutos
-
 async function tick() {
   try {
     backup.cleanupOld();
-    // Marca cuándo corrió la limpieza para poder mostrar el contador de la
-    // próxima pasada (solo tiene sentido si la retención está activada).
-    if (parseInt(getSetting('retention_hours', '0'), 10) > 0) {
-      setSetting('last_cleanup_run', String(Date.now()));
-    }
   } catch (e) {
     logger.error(`Automatic cleanup: ${e.message}`);
   }
@@ -84,4 +77,4 @@ function start() {
   setTimeout(tick, 15 * 1000);
 }
 
-module.exports = { start, TICK_MS };
+module.exports = { start };

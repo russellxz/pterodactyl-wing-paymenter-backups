@@ -13,7 +13,7 @@ function ensureKey() {
   if (!key) {
     key = crypto.randomBytes(24).toString('hex');
     setSetting('ext_api_key', key);
-    logger.info('Clave de API para la extensión del panel generada (ver Configuración).');
+    logger.info('API key for the panel extension generated (see Settings).');
   }
   return key;
 }
@@ -95,7 +95,7 @@ router.post('/run', (req, res) => {
   if (backup.job.active) return res.json({ ok: false, message: 'Ya hay una tarea en ejecución.' });
   const target = ['both', 'nodes', 'panel', 'node'].includes(req.body.target) ? req.body.target : 'both';
   const opts = target === 'node' ? { target: 'nodes', nodeId: parseInt(req.body.node_id, 10) } : { target };
-  logger.info('Copia manual iniciada desde la extensión del panel.');
+  logger.info('Manual backup started from the panel extension.');
   backup.runBackup(opts).catch((e) => logger.error(e.message));
   res.json({ ok: true, message: 'Copia iniciada.' });
 });
@@ -128,7 +128,7 @@ router.post('/snapshots/:id/restore', (req, res) => {
   if (backup.job.active) return res.json({ ok: false, message: 'Ya hay una tarea en ejecución.' });
   const snap = db.prepare('SELECT id FROM snapshots WHERE id = ?').get(req.params.id);
   if (!snap) return res.json({ ok: false, message: 'La fecha de copia no existe.' });
-  logger.info('Restauración de fecha completa iniciada desde la extensión del panel.');
+  logger.info('Full date restore started from the panel extension.');
   backup.restoreSnapshot(snap.id, !!req.body.wipe).catch((e) => logger.error(e.message));
   res.json({ ok: true, message: 'Restauración de la fecha iniciada.' });
 });
@@ -177,7 +177,7 @@ router.post('/backups/:id/restore', (req, res) => {
   if (req.body.expected_uuid && row.server_uuid !== String(req.body.expected_uuid)) {
     return res.status(403).json({ ok: false, message: 'Esta copia no pertenece a ese servidor.' });
   }
-  logger.info(`Restauración de "${row.server_name}" iniciada desde la extensión del panel.`);
+  logger.info(`Restore of "${row.server_name}" started from the panel extension.`);
   backup.restoreServer(row.id, !!req.body.wipe).catch((e) => logger.error(e.message));
   res.json({ ok: true, message: 'Restauración iniciada.' });
 });
@@ -214,7 +214,7 @@ router.post('/schedule', (req, res) => {
   const now = String(Date.now());
   if (newNodes !== prevNodes) setSetting('last_auto_run_nodes', now);
   if (newPanel !== prevPanel) setSetting('last_auto_run_panel', now);
-  logger.info('Programación actualizada desde la extensión del panel.');
+  logger.info('Schedule updated from the panel extension.');
   res.json({ ok: true, message: 'Configuración guardada.' });
 });
 

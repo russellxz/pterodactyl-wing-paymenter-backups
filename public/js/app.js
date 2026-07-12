@@ -19,7 +19,7 @@
       return;
     }
     card.hidden = false;
-    el('job-name').textContent = job.name || 'Tarea';
+    el('job-name').textContent = job.name || 'Task';
     el('job-msg').textContent = job.message || '';
     var count = el('job-count');
     var bar = el('job-bar');
@@ -33,12 +33,12 @@
     var cancelBtn = el('job-cancel');
     if (cancelBtn) {
       cancelBtn.disabled = !!job.cancelRequested;
-      if (job.cancelRequested) cancelBtn.textContent = 'Cancelando...';
+      if (job.cancelRequested) cancelBtn.textContent = 'Canceling...';
     }
   }
 
   window.cancelJob = function () {
-    if (!window.confirm('¿Cancelar la tarea en curso? Se detendrá al terminar el servidor actual.')) return;
+    if (!window.confirm('Cancel the running task? It will stop after the current server finishes.')) return;
     fetch('/api/job/cancel', { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (!d.ok) window.alert(d.message); })
@@ -170,7 +170,7 @@
       return;
     }
     if (form.getAttribute('data-wipe-ask') === '1') {
-      var wipe = window.confirm('¿Quieres VACIAR los archivos actuales del servidor antes de restaurar?\n\nAceptar = vaciar y restaurar limpio.\nCancelar = restaurar encima de los archivos actuales.');
+      var wipe = window.confirm('Do you want to WIPE the server\'s current files before restoring?\n\nOK = wipe and restore clean.\nCancel = restore on top of the current files.');
       var input = form.querySelector('input[name="wipe"]');
       if (input) input.value = wipe ? '1' : '0';
     }
@@ -186,7 +186,7 @@
     fetch(url, { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        window.alert((data.ok ? 'CORRECTO: ' : 'ERROR: ') + data.message);
+        window.alert((data.ok ? 'SUCCESS: ' : 'ERROR: ') + data.message);
       })
       .catch(function (e) {
         window.alert('ERROR: ' + e.message);

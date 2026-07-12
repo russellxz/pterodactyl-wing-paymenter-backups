@@ -1,0 +1,119 @@
+<%- include('partials/head') %>
+
+<header class="page-head">
+  <h1><span class="title-pay"><i data-lucide="credit-card"></i></span>Paymenter</h1>
+  <p>Connect your <a href="https://paymenter.org/" target="_blank" rel="noopener">Paymenter</a> billing panel over SSH to back up its full database + <code>.env</code> file, on its own schedule, completely separate from Pterodactyl.</p>
+</header>
+
+<section class="stats-grid stats-grid-3">
+  <div class="card stat">
+    <i data-lucide="credit-card"></i>
+    <div><span class="stat-num"><%= paymenters.length %></span><span class="stat-label">Installations</span></div>
+  </div>
+  <div class="card stat">
+    <i data-lucide="archive"></i>
+    <div><span class="stat-num"><%= pmStats.backups %></span><span class="stat-label">Paymenter backups</span></div>
+  </div>
+  <div class="card stat">
+    <i data-lucide="clock"></i>
+    <div><span class="stat-num stat-small"><%= pmStats.last ? pmStats.last.created_at : 'Never' %></span><span class="stat-label">Last backup</span></div>
+  </div>
+</section>
+
+<% if (can('run_backups') && paymenters.length) { %>
+<section class="card">
+  <h2><i data-lucide="zap"></i>Manual backup</h2>
+  <p class="muted">Back up the Paymenter database right now. It appears in <a href="/backups">Backups</a>, where you can download it, restore it (to the same VPS or a new one) or delete it.</p>
+  <form method="post" action="/backups/run" class="form-inline">
+    <input type="hidden" name="target" value="paymenter">
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Back up Paymenter now</button>
+  </form>
+</section>
+<% } %>
+
+<section class="card">
+  <h2><i data-lucide="credit-card"></i>Paymenter installations</h2>
+  <p class="muted">The database details are in the <code>/var/www/paymenter/.env</code> file on the Paymenter VPS (<code>DB_USERNAME</code>, <code>DB_PASSWORD</code> and <code>DB_DATABASE</code>, usually <code>paymenter</code> / <code>paymenter</code>). Install <code>zip</code> and <code>unzip</code> on that VPS too. You can add several installations.</p>
+
+  <% if (paymenters.length) { %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Actions</th></tr></thead>
+      <tbody>
+        <% paymenters.forEach(pm => { %>
+        <tr>
+          <td><b><%= pm.name %></b></td>
+          <td><%= pm.host %>:<%= pm.ssh_port %></td>
+          <td class="muted"><%= pm.db_name %> (<%= pm.db_user %>)</td>
+          <td class="row-actions">
+            <% if (can('manage_nodes')) { %>
+            <button class="btn btn-sm" type="button" onclick="testConnection('/paymenters/<%= pm.id %>/test', this)" title="Test connection"><i data-lucide="plug-zap"></i></button>
+            <button class="btn btn-sm" type="button" onclick="openDialog('paymenter-edit-<%= pm.id %>')" title="Edit / change passwords"><i data-lucide="pencil"></i></button>
+            <form method="post" action="/paymenters/<%= pm.id %>/delete" class="inline" data-confirm="Delete the Paymenter &quot;<%= pm.name %>&quot;? Its stored backups are kept.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete Paymenter"><i data-lucide="trash-2"></i></button>
+            </form>
+            <% } %>
+          </td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>No Paymenter installations yet. Add the first one below.</p>
+  <% } %>
+
+  <% if (can('manage_nodes')) { %>
+  <h3 class="sub-title">Add Paymenter</h3>
+  <form method="post" action="/paymenters" class="form-grid">
+    <label>Name<input name="name" required placeholder="Main Paymenter"></label>
+    <label>Paymenter VPS IP<input name="host" required placeholder="203.0.113.40"></label>
+    <label>SSH port<input name="ssh_port" type="number" value="22"></label>
+    <label>SSH user<input name="ssh_user" value="root"></label>
+    <label>SSH password<input name="ssh_password" type="password" required placeholder="SSH password"></label>
+    <label>Database user<input name="db_user" value="paymenter"></label>
+    <label>Database password<input name="db_password" type="password" required placeholder="Database password"></label>
+    <label>Database name<input name="db_name" value="paymenter"></label>
+    <label>.env file path<input name="env_path" value="/var/www/paymenter/.env"></label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Add Paymenter</button>
+    </div>
+  </form>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2><i data-lucide="calendar-clock"></i>Automatic backups</h2>
+  <div class="kv">
+    <div><span class="muted">Paymenter schedule:</span> <b><%= pmStats.scheduleHours == 0 ? 'Disabled' : (pmStats.scheduleHours == 1 ? 'Every hour' : 'Every ' + (pmStats.scheduleHours / 24) + ' day(s)') %></b></div>
+  </div>
+  <p class="muted small">Paymenter has its own timer, separate from the nodes and the panel database, so backups never run on the same day or at the same time. <% if (can('manage_settings')) { %>Change it in <a href="/settings">Settings</a>.<% } %> When enabled, its live countdown appears at the top of every page.</p>
+</section>
+
+<% if (can('manage_nodes')) { %>
+  <%# ----- Paymenter edit modals ----- %>
+  <% paymenters.forEach(pm => { %>
+  <dialog id="paymenter-edit-<%= pm.id %>" class="modal">
+    <form method="post" action="/paymenters/<%= pm.id %>/update" class="form">
+      <h2><i data-lucide="pencil"></i>Edit Paymenter: <%= pm.name %></h2>
+      <div class="form-grid">
+        <label>Name<input name="name" required value="<%= pm.name %>"></label>
+        <label>IP<input name="host" required value="<%= pm.host %>"></label>
+        <label>SSH port<input name="ssh_port" type="number" value="<%= pm.ssh_port %>"></label>
+        <label>SSH user<input name="ssh_user" value="<%= pm.ssh_user %>"></label>
+        <label>New SSH password<input name="ssh_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
+        <label>Database user<input name="db_user" value="<%= pm.db_user %>"></label>
+        <label>New database password<input name="db_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
+        <label>Database name<input name="db_name" value="<%= pm.db_name %>"></label>
+        <label>.env file path<input name="env_path" value="<%= pm.env_path %>"></label>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Save changes</button>
+      </div>
+    </form>
+  </dialog>
+  <% }) %>
+<% } %>
+
+<%- include('partials/foot') %>

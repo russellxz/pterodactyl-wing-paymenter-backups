@@ -1,33 +1,33 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Copias de seguridad</h1>
-  <p>Las copias de los nodos están organizadas por fechas dentro de cada nodo. Las de la base de datos de los paneles van por separado.</p>
+  <h1>Backups</h1>
+  <p>Node backups are organized by date inside each node. Panel and Paymenter database backups live in their own sections.</p>
 </header>
 
 <% if (can('run_backups')) { %>
 <section class="card">
-  <h2><i data-lucide="zap"></i>Copia manual</h2>
+  <h2><i data-lucide="zap"></i>Manual backup</h2>
   <form method="post" action="/backups/run" class="form-inline">
     <select name="target" onchange="document.getElementById('node-pick').hidden = this.value !== 'node'">
-      <option value="all">Todo (nodos + paneles + Paymenter)</option>
-      <option value="both">Nodos + BD de paneles</option>
-      <option value="nodes">Solo nodos (archivos de servidores)</option>
-      <option value="panel">Solo BD de los paneles</option>
-      <option value="paymenter">Solo BD de Paymenter</option>
-      <% if (nodes.length) { %><option value="node">Un nodo específico</option><% } %>
+      <option value="all">Everything (nodes + panels + Paymenter)</option>
+      <option value="both">Nodes + panel databases</option>
+      <option value="nodes">Nodes only (server files)</option>
+      <option value="panel">Panel databases only</option>
+      <option value="paymenter">Paymenter database only</option>
+      <% if (nodes.length) { %><option value="node">A specific node</option><% } %>
     </select>
     <select name="node_id" id="node-pick" hidden>
       <% nodes.forEach(n => { %><option value="<%= n.id %>"><%= n.name %></option><% }) %>
     </select>
-    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Hacer copia ahora</button>
+    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Back up now</button>
   </form>
 </section>
 <% } %>
 
 <section class="card">
-  <h2><i data-lucide="server"></i>Copias por nodo</h2>
-  <p class="muted small">Pulsa un nodo para ver sus fechas de copia y, dentro de cada fecha, todos los servidores guardados.</p>
+  <h2><i data-lucide="server"></i>Backups per node</h2>
+  <p class="muted small">Open a node to see its backup dates and, inside each date, every server that was saved.</p>
   <% if (nodes.length) { %>
   <div class="node-grid">
     <% nodes.forEach(n => { %>
@@ -35,42 +35,42 @@
       <div class="node-card-head"><i data-lucide="server"></i><span><%= n.name %></span></div>
       <div class="muted small"><%= n.host %></div>
       <div class="node-card-stats">
-        <div><span class="muted small">Fechas de copia</span><b><%= n.snaps %></b></div>
-        <div><span class="muted small">Espacio</span><b><%= fmtSize(n.total_size) %></b></div>
+        <div><span class="muted small">Backup dates</span><b><%= n.snaps %></b></div>
+        <div><span class="muted small">Disk</span><b><%= fmtSize(n.total_size) %></b></div>
       </div>
-      <div class="muted small">Última: <b><%= n.last_snap || 'Nunca' %></b></div>
-      <span class="node-card-link">Ver copias <i data-lucide="arrow-right"></i></span>
+      <div class="muted small">Last: <b><%= n.last_snap || 'Never' %></b></div>
+      <span class="node-card-link">View backups <i data-lucide="arrow-right"></i></span>
     </a>
     <% }) %>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay nodos. Agrégalos en <a href="/nodes">Nodos y Paneles</a>.</p>
+  <p class="empty"><i data-lucide="inbox"></i>No nodes yet. Add them in <a href="/nodes">Pterodactyl</a>.</p>
   <% } %>
 </section>
 
 <section class="card">
-  <h2><i data-lucide="database"></i>Copias de la BD de los paneles</h2>
-  <p class="muted small">Estas copias van por separado: restaurar fechas de nodos nunca toca la base de datos del panel.</p>
+  <h2><i data-lucide="database"></i>Panel database backups</h2>
+  <p class="muted small">These backups are independent: restoring node dates never touches the panel database.</p>
   <% if (panelBackups.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Panel</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Panel</th><th>Size</th><th>Date</th><th>Actions</th></tr></thead>
       <tbody>
         <% panelBackups.forEach(b => { %>
         <tr>
-          <td><span class="badge badge-db"><i data-lucide="database"></i><%= b.panel_name || 'Panel eliminado' %></span></td>
+          <td><span class="badge badge-db"><i data-lucide="database"></i><%= b.panel_name || 'Deleted panel' %></span></td>
           <td><%= fmtSize(b.size) %></td>
           <td class="muted"><%= b.created_at %></td>
           <td class="row-actions">
             <% if (can('download_backups')) { %>
-            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
+            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
             <% } %>
             <% if (can('restore_backups')) { %>
-            <button class="btn btn-sm" type="button" title="Restaurar BD" onclick="openPanelRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
+            <button class="btn btn-sm" type="button" title="Restore panel DB" onclick="openPanelRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
             <% } %>
             <% if (can('delete_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar esta copia de la base de datos? No se puede deshacer.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="Delete this panel database backup? This cannot be undone.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -80,33 +80,33 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias de bases de datos.</p>
+  <p class="empty"><i data-lucide="inbox"></i>No panel database backups yet.</p>
   <% } %>
 </section>
 
 <section class="card">
-  <h2><i data-lucide="credit-card"></i>Copias de la BD de Paymenter</h2>
-  <p class="muted small">Cada copia incluye la base de datos completa de Paymenter (mysqldump) y su archivo <code>.env</code>. Puedes restaurarla al mismo VPS o a uno nuevo. Estas copias van por separado: nunca tocan el panel ni los nodos.</p>
+  <h2><i data-lucide="credit-card"></i>Paymenter database backups</h2>
+  <p class="muted small">Each backup includes the full Paymenter database (mysqldump) plus its <code>.env</code> file. You can restore it to the same VPS or to a new one. These backups never touch the panel or the nodes.</p>
   <% if (paymenterBackups.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Paymenter</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Paymenter</th><th>Size</th><th>Date</th><th>Actions</th></tr></thead>
       <tbody>
         <% paymenterBackups.forEach(b => { %>
         <tr>
-          <td><span class="badge badge-pay"><i data-lucide="credit-card"></i><%= b.paymenter_name || 'Paymenter eliminado' %></span></td>
+          <td><span class="badge badge-pay"><i data-lucide="credit-card"></i><%= b.paymenter_name || 'Deleted Paymenter' %></span></td>
           <td><%= fmtSize(b.size) %></td>
           <td class="muted"><%= b.created_at %></td>
           <td class="row-actions">
             <% if (can('download_backups')) { %>
-            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Descargar"><i data-lucide="download"></i></a>
+            <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
             <% } %>
             <% if (can('restore_backups')) { %>
-            <button class="btn btn-sm" type="button" title="Restaurar BD de Paymenter" onclick="openPaymenterRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
+            <button class="btn btn-sm" type="button" title="Restore Paymenter DB" onclick="openPaymenterRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
             <% } %>
             <% if (can('delete_backups')) { %>
-            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="¿Eliminar esta copia de la base de datos de Paymenter? No se puede deshacer.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar"><i data-lucide="trash-2"></i></button>
+            <form method="post" action="/backups/<%= b.id %>/delete" class="inline" data-confirm="Delete this Paymenter database backup? This cannot be undone.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -116,38 +116,38 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay copias de Paymenter.<% if (!paymenters.length) { %>&nbsp;Agrega tu Paymenter en <a href="/nodes">Nodos y Paneles</a> y usa "Hacer copia ahora" eligiendo "Solo BD de Paymenter".<% } %></p>
+  <p class="empty"><i data-lucide="inbox"></i>No Paymenter backups yet.<% if (!paymenters.length) { %>&nbsp;Add your Paymenter in <a href="/paymenter">Paymenter</a> and use "Back up now" choosing "Paymenter database only".<% } %></p>
   <% } %>
 </section>
 
 <% if (can('restore_backups') && paymenterBackups.length) { %>
 <dialog id="paymenter-restore" class="modal">
   <form method="post" action="/restore-paymenter" class="form">
-    <h2><i data-lucide="credit-card"></i>Restaurar base de datos de Paymenter</h2>
-    <label>Copia a restaurar
+    <h2><i data-lucide="credit-card"></i>Restore a Paymenter database</h2>
+    <label>Backup to restore
       <select name="backup_id" id="paymenter-backup-select">
-        <% paymenterBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.paymenter_name || 'Paymenter eliminado') %> — <%= b.created_at %></option><% }) %>
+        <% paymenterBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.paymenter_name || 'Deleted Paymenter') %> — <%= b.created_at %></option><% }) %>
       </select>
     </label>
-    <label>Destino
+    <label>Destination
       <select name="mode" onchange="document.getElementById('paymenter-custom-target').hidden = this.value !== 'custom'">
-        <option value="saved">El Paymenter de esta copia (configuración guardada)</option>
-        <option value="custom">Otro VPS (Paymenter nuevo)</option>
+        <option value="saved">The Paymenter of this backup (saved settings)</option>
+        <option value="custom">Another VPS (new Paymenter)</option>
       </select>
     </label>
     <div id="paymenter-custom-target" hidden class="form-grid">
-      <label>IP del VPS nuevo<input name="host" placeholder="203.0.113.40"></label>
-      <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
-      <label>Usuario SSH<input name="ssh_user" value="root"></label>
-      <label>Contraseña SSH<input name="ssh_password" type="password"></label>
-      <label>Usuario de la BD<input name="db_user" value="paymenter"></label>
-      <label>Contraseña de la BD<input name="db_password" type="password"></label>
-      <label>Nombre de la BD<input name="db_name" value="paymenter"></label>
+      <label>New VPS IP<input name="host" placeholder="203.0.113.40"></label>
+      <label>SSH port<input name="ssh_port" type="number" value="22"></label>
+      <label>SSH user<input name="ssh_user" value="root"></label>
+      <label>SSH password<input name="ssh_password" type="password"></label>
+      <label>Database user<input name="db_user" value="paymenter"></label>
+      <label>Database password<input name="db_password" type="password"></label>
+      <label>Database name<input name="db_name" value="paymenter"></label>
     </div>
-    <p class="muted small">El VPS destino debe tener Paymenter ya instalado (con su base de datos creada). El .zip incluye también el archivo <code>.env</code> original por si necesitas copiarlo a <code>/var/www/paymenter/.env</code>. Después de restaurar, limpia cachés en el VPS de Paymenter con <code>php artisan optimize:clear</code>.</p>
+    <p class="muted small">The destination VPS must already have Paymenter installed (with its database created). The .zip also includes the original <code>.env</code> file in case you need to copy it to <code>/var/www/paymenter/.env</code>. After restoring, clear Paymenter's caches on that VPS with <code>php artisan optimize:clear</code>.</p>
     <div class="form-actions">
-      <button class="btn" type="button" onclick="document.getElementById('paymenter-restore').close()">Cancelar</button>
-      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar base de datos</button>
+      <button class="btn" type="button" onclick="document.getElementById('paymenter-restore').close()">Cancel</button>
+      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore database</button>
     </div>
   </form>
 </dialog>
@@ -156,31 +156,31 @@
 <% if (can('restore_backups') && panelBackups.length) { %>
 <dialog id="panel-restore" class="modal">
   <form method="post" action="/restore-panel" class="form">
-    <h2><i data-lucide="database"></i>Restaurar base de datos de un panel</h2>
-    <label>Copia a restaurar
+    <h2><i data-lucide="database"></i>Restore a panel database</h2>
+    <label>Backup to restore
       <select name="backup_id" id="panel-backup-select">
-        <% panelBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.panel_name || 'Panel eliminado') %> — <%= b.created_at %></option><% }) %>
+        <% panelBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.panel_name || 'Deleted panel') %> — <%= b.created_at %></option><% }) %>
       </select>
     </label>
-    <label>Destino
+    <label>Destination
       <select name="mode" onchange="document.getElementById('custom-target').hidden = this.value !== 'custom'">
-        <option value="saved">El panel de esta copia (configuración guardada)</option>
-        <option value="custom">Otro VPS (panel nuevo)</option>
+        <option value="saved">The panel of this backup (saved settings)</option>
+        <option value="custom">Another VPS (new panel)</option>
       </select>
     </label>
     <div id="custom-target" hidden class="form-grid">
-      <label>IP del panel nuevo<input name="host" placeholder="203.0.113.30"></label>
-      <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
-      <label>Usuario SSH<input name="ssh_user" value="root"></label>
-      <label>Contraseña SSH<input name="ssh_password" type="password"></label>
-      <label>Usuario de la BD<input name="db_user" value="pterodactyl"></label>
-      <label>Contraseña de la BD<input name="db_password" type="password"></label>
-      <label>Nombre de la BD<input name="db_name" value="panel"></label>
+      <label>New panel IP<input name="host" placeholder="203.0.113.30"></label>
+      <label>SSH port<input name="ssh_port" type="number" value="22"></label>
+      <label>SSH user<input name="ssh_user" value="root"></label>
+      <label>SSH password<input name="ssh_password" type="password"></label>
+      <label>Database user<input name="db_user" value="pterodactyl"></label>
+      <label>Database password<input name="db_password" type="password"></label>
+      <label>Database name<input name="db_name" value="panel"></label>
     </div>
-    <p class="muted small">El panel destino debe tener Pterodactyl ya instalado (con su base de datos creada). El .zip incluye también el archivo <code>.env</code> original por si necesitas copiarlo a <code>/var/www/pterodactyl/.env</code>.</p>
+    <p class="muted small">The destination panel must already have Pterodactyl installed (with its database created). The .zip also includes the original <code>.env</code> file in case you need to copy it to <code>/var/www/pterodactyl/.env</code>.</p>
     <div class="form-actions">
-      <button class="btn" type="button" onclick="document.getElementById('panel-restore').close()">Cancelar</button>
-      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restaurar base de datos</button>
+      <button class="btn" type="button" onclick="document.getElementById('panel-restore').close()">Cancel</button>
+      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore database</button>
     </div>
   </form>
 </dialog>

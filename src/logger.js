@@ -14,6 +14,6 @@ function write(level, message) {
 
 module.exports = {
   info: (m) => write('INFO', m),
-  warn: (m) => write('AVISO', m),
+  warn: (m) => write('WARN', m),
   error: (m) => write('ERROR', m),
 };

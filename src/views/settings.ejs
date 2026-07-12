@@ -1,78 +1,78 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Configuración</h1>
-  <p>Programa las copias automáticas y el borrado de copias antiguas.</p>
+  <h1>Settings</h1>
+  <p>Schedule automatic backups and old backup cleanup.</p>
 </header>
 
 <section class="card">
   <form method="post" action="/settings" class="form">
-    <label><i data-lucide="server"></i>Copias automáticas de los NODOS (archivos de servidores)
+    <label><i data-lucide="server"></i>Automatic NODE backups (server files)
       <select name="schedule_hours_nodes">
-        <option value="0" <%= scheduleHoursNodes == '0' ? 'selected' : '' %>>Desactivadas</option>
-        <option value="1" <%= scheduleHoursNodes == '1' ? 'selected' : '' %>>Cada 1 hora</option>
-        <option value="24" <%= scheduleHoursNodes == '24' ? 'selected' : '' %>>Cada 1 día</option>
-        <option value="168" <%= scheduleHoursNodes == '168' ? 'selected' : '' %>>Cada 7 días</option>
-        <option value="360" <%= scheduleHoursNodes == '360' ? 'selected' : '' %>>Cada 15 días</option>
-        <option value="720" <%= scheduleHoursNodes == '720' ? 'selected' : '' %>>Cada 30 días</option>
+        <option value="0" <%= scheduleHoursNodes == '0' ? 'selected' : '' %>>Disabled</option>
+        <option value="1" <%= scheduleHoursNodes == '1' ? 'selected' : '' %>>Every hour</option>
+        <option value="24" <%= scheduleHoursNodes == '24' ? 'selected' : '' %>>Every day</option>
+        <option value="168" <%= scheduleHoursNodes == '168' ? 'selected' : '' %>>Every 7 days</option>
+        <option value="360" <%= scheduleHoursNodes == '360' ? 'selected' : '' %>>Every 15 days</option>
+        <option value="720" <%= scheduleHoursNodes == '720' ? 'selected' : '' %>>Every 30 days</option>
       </select>
     </label>
 
-    <label><i data-lucide="database"></i>Copias automáticas de la BD del PANEL
+    <label><i data-lucide="database"></i>Automatic PANEL database backups
       <select name="schedule_hours_panel">
-        <option value="0" <%= scheduleHoursPanel == '0' ? 'selected' : '' %>>Desactivadas</option>
-        <option value="1" <%= scheduleHoursPanel == '1' ? 'selected' : '' %>>Cada 1 hora</option>
-        <option value="24" <%= scheduleHoursPanel == '24' ? 'selected' : '' %>>Cada 1 día</option>
-        <option value="168" <%= scheduleHoursPanel == '168' ? 'selected' : '' %>>Cada 7 días</option>
-        <option value="360" <%= scheduleHoursPanel == '360' ? 'selected' : '' %>>Cada 15 días</option>
-        <option value="720" <%= scheduleHoursPanel == '720' ? 'selected' : '' %>>Cada 30 días</option>
+        <option value="0" <%= scheduleHoursPanel == '0' ? 'selected' : '' %>>Disabled</option>
+        <option value="1" <%= scheduleHoursPanel == '1' ? 'selected' : '' %>>Every hour</option>
+        <option value="24" <%= scheduleHoursPanel == '24' ? 'selected' : '' %>>Every day</option>
+        <option value="168" <%= scheduleHoursPanel == '168' ? 'selected' : '' %>>Every 7 days</option>
+        <option value="360" <%= scheduleHoursPanel == '360' ? 'selected' : '' %>>Every 15 days</option>
+        <option value="720" <%= scheduleHoursPanel == '720' ? 'selected' : '' %>>Every 30 days</option>
       </select>
     </label>
 
-    <label><i data-lucide="credit-card"></i>Copias automáticas de la BD de PAYMENTER
+    <label><i data-lucide="credit-card"></i>Automatic PAYMENTER database backups
       <select name="schedule_hours_paymenter">
-        <option value="0" <%= scheduleHoursPaymenter == '0' ? 'selected' : '' %>>Desactivadas</option>
-        <option value="1" <%= scheduleHoursPaymenter == '1' ? 'selected' : '' %>>Cada 1 hora</option>
-        <option value="24" <%= scheduleHoursPaymenter == '24' ? 'selected' : '' %>>Cada 1 día</option>
-        <option value="168" <%= scheduleHoursPaymenter == '168' ? 'selected' : '' %>>Cada 7 días</option>
-        <option value="360" <%= scheduleHoursPaymenter == '360' ? 'selected' : '' %>>Cada 15 días</option>
-        <option value="720" <%= scheduleHoursPaymenter == '720' ? 'selected' : '' %>>Cada 30 días</option>
+        <option value="0" <%= scheduleHoursPaymenter == '0' ? 'selected' : '' %>>Disabled</option>
+        <option value="1" <%= scheduleHoursPaymenter == '1' ? 'selected' : '' %>>Every hour</option>
+        <option value="24" <%= scheduleHoursPaymenter == '24' ? 'selected' : '' %>>Every day</option>
+        <option value="168" <%= scheduleHoursPaymenter == '168' ? 'selected' : '' %>>Every 7 days</option>
+        <option value="360" <%= scheduleHoursPaymenter == '360' ? 'selected' : '' %>>Every 15 days</option>
+        <option value="720" <%= scheduleHoursPaymenter == '720' ? 'selected' : '' %>>Every 30 days</option>
       </select>
     </label>
 
-    <label><i data-lucide="trash-2"></i>Borrar copias antiguas
+    <label><i data-lucide="trash-2"></i>Delete old backups
       <select name="retention_hours">
-        <option value="0" <%= retentionHours == '0' ? 'selected' : '' %>>Nunca (conservar todo)</option>
-        <option value="1" <%= retentionHours == '1' ? 'selected' : '' %>>Con más de 1 hora</option>
-        <option value="24" <%= retentionHours == '24' ? 'selected' : '' %>>Con más de 1 día</option>
-        <option value="168" <%= retentionHours == '168' ? 'selected' : '' %>>Con más de 7 días</option>
-        <option value="360" <%= retentionHours == '360' ? 'selected' : '' %>>Con más de 15 días</option>
-        <option value="720" <%= retentionHours == '720' ? 'selected' : '' %>>Con más de 30 días</option>
+        <option value="0" <%= retentionHours == '0' ? 'selected' : '' %>>Never (keep everything)</option>
+        <option value="1" <%= retentionHours == '1' ? 'selected' : '' %>>Older than 1 hour</option>
+        <option value="24" <%= retentionHours == '24' ? 'selected' : '' %>>Older than 1 day</option>
+        <option value="168" <%= retentionHours == '168' ? 'selected' : '' %>>Older than 7 days</option>
+        <option value="360" <%= retentionHours == '360' ? 'selected' : '' %>>Older than 15 days</option>
+        <option value="720" <%= retentionHours == '720' ? 'selected' : '' %>>Older than 30 days</option>
       </select>
     </label>
 
-    <p class="muted small">Los nodos, la base de datos del panel y la de Paymenter tienen cada uno su propio temporizador, así no se copian al mismo tiempo. El sistema revisa la programación cada 2 minutos. Si activas el borrado automático, asegúrate de que los intervalos de copias sean menores que la retención para no quedarte sin copias.</p>
+    <p class="muted small">The nodes, the panel database and the Paymenter database each have their own timer, so they never back up at the same time. The system checks the schedule every 2 minutes. If you enable automatic cleanup, make sure the backup intervals are shorter than the retention so you never run out of backups.</p>
 
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar configuración</button>
+      <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Save settings</button>
     </div>
   </form>
 </section>
 
 <section class="card">
-  <h2><i data-lucide="puzzle"></i>Extensión del panel de Pterodactyl</h2>
-  <p class="muted">Conecta tu panel con este sistema: instala la extensión (carpeta <code>extension/</code> del proyecto, instrucciones en su README) y pega estos dos datos en <code>https://TU-PANEL/admin/pterobackups</code>. Los admins del panel podrán gestionar las copias y cada usuario verá las de su servidor.</p>
+  <h2><i data-lucide="puzzle"></i>Pterodactyl panel extension</h2>
+  <p class="muted">Connect your panel to this system: install the extension (the project's <code>extension/</code> folder — instructions in its README) and paste these two values in <code>https://YOUR-PANEL/admin/pterobackups</code>. Panel admins can manage backups and every user sees their own server's backups.</p>
   <div class="form-grid">
-    <label>URL de este sistema
+    <label>This system's URL
       <input readonly value="<%= extUrl %>" onclick="this.select()">
     </label>
-    <label>Clave de API
+    <label>API key
       <input readonly value="<%= extApiKey %>" onclick="this.select()">
     </label>
   </div>
   <div class="form-actions">
-    <form method="post" action="/settings/regen-key" class="inline" data-confirm="¿Generar una clave NUEVA? La extensión del panel dejará de funcionar hasta que pegues la clave nueva en /admin/pterobackups.">
-      <button class="btn btn-warn" type="submit"><i data-lucide="refresh-ccw"></i>Regenerar clave</button>
+    <form method="post" action="/settings/regen-key" class="inline" data-confirm="Generate a NEW key? The panel extension will stop working until you paste the new key in /admin/pterobackups.">
+      <button class="btn btn-warn" type="submit"><i data-lucide="refresh-ccw"></i>Regenerate key</button>
     </form>
   </div>
 </section>

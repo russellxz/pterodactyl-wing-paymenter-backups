@@ -1,18 +1,18 @@
 <%- include('partials/head') %>
 
 <header class="page-head">
-  <h1>Nodos, Paneles y Paymenter</h1>
-  <p>Conecta tus paneles de Pterodactyl, tus nodos (Wings) y tus instalaciones de Paymenter por SSH. Puedes editar cualquiera para cambiar su IP o contraseña.</p>
+  <h1>Pterodactyl</h1>
+  <p>Connect your Pterodactyl panels and your nodes (Wings) over SSH. You can edit any of them to change their IP or password. Looking for your billing panel? It has its own page: <a href="/paymenter">Paymenter</a>.</p>
 </header>
 
 <section class="card">
-  <h2><i data-lucide="database"></i>Paneles de Pterodactyl</h2>
-  <p class="muted">Cada panel sirve para copiar su base de datos + archivo <code>.env</code> y para saber el dueño de cada servidor. Los datos de la BD están en <code>/var/www/pterodactyl/.env</code> del panel (<code>DB_USERNAME</code>, <code>DB_PASSWORD</code> y <code>DB_DATABASE</code>). Puedes agregar varios paneles.</p>
+  <h2><i data-lucide="database"></i>Pterodactyl panels</h2>
+  <p class="muted">Each panel is used to back up its database + <code>.env</code> file and to know who owns each server. The database details are in the panel's <code>/var/www/pterodactyl/.env</code> file (<code>DB_USERNAME</code>, <code>DB_PASSWORD</code> and <code>DB_DATABASE</code>). You can add several panels.</p>
 
   <% if (panels.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Nombre</th><th>IP</th><th>BD</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Actions</th></tr></thead>
       <tbody>
         <% panels.forEach(p => { %>
         <tr>
@@ -21,10 +21,10 @@
           <td class="muted"><%= p.db_name %> (<%= p.db_user %>)</td>
           <td class="row-actions">
             <% if (can('manage_nodes')) { %>
-            <button class="btn btn-sm" type="button" onclick="testConnection('/panels/<%= p.id %>/test', this)" title="Probar conexión"><i data-lucide="plug-zap"></i></button>
-            <button class="btn btn-sm" type="button" onclick="openDialog('panel-edit-<%= p.id %>')" title="Editar / cambiar contraseñas"><i data-lucide="pencil"></i></button>
-            <form method="post" action="/panels/<%= p.id %>/delete" class="inline" data-confirm="¿Eliminar el panel &quot;<%= p.name %>&quot;? Sus copias guardadas se conservan.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar panel"><i data-lucide="trash-2"></i></button>
+            <button class="btn btn-sm" type="button" onclick="testConnection('/panels/<%= p.id %>/test', this)" title="Test connection"><i data-lucide="plug-zap"></i></button>
+            <button class="btn btn-sm" type="button" onclick="openDialog('panel-edit-<%= p.id %>')" title="Edit / change passwords"><i data-lucide="pencil"></i></button>
+            <form method="post" action="/panels/<%= p.id %>/delete" class="inline" data-confirm="Delete the panel &quot;<%= p.name %>&quot;? Its stored backups are kept.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete panel"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -34,100 +34,49 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay paneles. Agrega el primero aquí abajo.</p>
+  <p class="empty"><i data-lucide="inbox"></i>No panels yet. Add the first one below.</p>
   <% } %>
 
   <% if (can('manage_nodes')) { %>
-  <h3 class="sub-title">Agregar panel</h3>
+  <h3 class="sub-title">Add panel</h3>
   <form method="post" action="/panels" class="form-grid">
-    <label>Nombre del panel<input name="name" required placeholder="Panel principal"></label>
-    <label>IP del panel<input name="host" required placeholder="203.0.113.10"></label>
-    <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
-    <label>Usuario SSH<input name="ssh_user" value="root"></label>
-    <label>Contraseña SSH<input name="ssh_password" type="password" required placeholder="Contraseña SSH"></label>
-    <label>Usuario de la BD<input name="db_user" value="pterodactyl"></label>
-    <label>Contraseña de la BD<input name="db_password" type="password" required placeholder="Contraseña de la base de datos"></label>
-    <label>Nombre de la BD<input name="db_name" value="panel"></label>
-    <label>Ruta del archivo .env<input name="env_path" value="/var/www/pterodactyl/.env"></label>
+    <label>Panel name<input name="name" required placeholder="Main panel"></label>
+    <label>Panel IP<input name="host" required placeholder="203.0.113.10"></label>
+    <label>SSH port<input name="ssh_port" type="number" value="22"></label>
+    <label>SSH user<input name="ssh_user" value="root"></label>
+    <label>SSH password<input name="ssh_password" type="password" required placeholder="SSH password"></label>
+    <label>Database user<input name="db_user" value="pterodactyl"></label>
+    <label>Database password<input name="db_password" type="password" required placeholder="Database password"></label>
+    <label>Database name<input name="db_name" value="panel"></label>
+    <label>.env file path<input name="env_path" value="/var/www/pterodactyl/.env"></label>
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar panel</button>
+      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Add panel</button>
     </div>
   </form>
   <% } %>
 </section>
 
 <section class="card">
-  <h2><i data-lucide="credit-card"></i>Paymenter (panel de facturación)</h2>
-  <p class="muted">Cada instalación de Paymenter sirve para copiar su base de datos + archivo <code>.env</code> por SSH. Los datos de la BD están en <code>/var/www/paymenter/.env</code> del VPS de Paymenter (<code>DB_USERNAME</code>, <code>DB_PASSWORD</code> y <code>DB_DATABASE</code>, normalmente <code>paymenter</code> / <code>paymenter</code>). Puedes agregar varias instalaciones.</p>
-
-  <% if (paymenters.length) { %>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Nombre</th><th>IP</th><th>BD</th><th>Acciones</th></tr></thead>
-      <tbody>
-        <% paymenters.forEach(pm => { %>
-        <tr>
-          <td><b><%= pm.name %></b></td>
-          <td><%= pm.host %>:<%= pm.ssh_port %></td>
-          <td class="muted"><%= pm.db_name %> (<%= pm.db_user %>)</td>
-          <td class="row-actions">
-            <% if (can('manage_nodes')) { %>
-            <button class="btn btn-sm" type="button" onclick="testConnection('/paymenters/<%= pm.id %>/test', this)" title="Probar conexión"><i data-lucide="plug-zap"></i></button>
-            <button class="btn btn-sm" type="button" onclick="openDialog('paymenter-edit-<%= pm.id %>')" title="Editar / cambiar contraseñas"><i data-lucide="pencil"></i></button>
-            <form method="post" action="/paymenters/<%= pm.id %>/delete" class="inline" data-confirm="¿Eliminar el Paymenter &quot;<%= pm.name %>&quot;? Sus copias guardadas se conservan.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar Paymenter"><i data-lucide="trash-2"></i></button>
-            </form>
-            <% } %>
-          </td>
-        </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-  <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay instalaciones de Paymenter. Agrega la primera aquí abajo.</p>
-  <% } %>
-
-  <% if (can('manage_nodes')) { %>
-  <h3 class="sub-title">Agregar Paymenter</h3>
-  <form method="post" action="/paymenters" class="form-grid">
-    <label>Nombre<input name="name" required placeholder="Paymenter principal"></label>
-    <label>IP del VPS de Paymenter<input name="host" required placeholder="203.0.113.40"></label>
-    <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
-    <label>Usuario SSH<input name="ssh_user" value="root"></label>
-    <label>Contraseña SSH<input name="ssh_password" type="password" required placeholder="Contraseña SSH"></label>
-    <label>Usuario de la BD<input name="db_user" value="paymenter"></label>
-    <label>Contraseña de la BD<input name="db_password" type="password" required placeholder="Contraseña de la base de datos"></label>
-    <label>Nombre de la BD<input name="db_name" value="paymenter"></label>
-    <label>Ruta del archivo .env<input name="env_path" value="/var/www/paymenter/.env"></label>
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar Paymenter</button>
-    </div>
-  </form>
-  <% } %>
-</section>
-
-<section class="card">
-  <h2><i data-lucide="server"></i>Nodos (Wings)</h2>
-  <p class="muted">Cada nodo es un VPS con Wings. El sistema comprime los archivos de cada servidor en <code>/var/lib/pterodactyl/volumes</code> (excluyendo <code>node_modules</code> y <code>package-lock.json</code>) y descarga los .zip. En cada nodo instala antes: <code>sudo apt update && sudo apt install -y zip unzip</code>.</p>
+  <h2><i data-lucide="server"></i>Nodes (Wings)</h2>
+  <p class="muted">Each node is a VPS running Wings. The system zips every server's files in <code>/var/lib/pterodactyl/volumes</code> (excluding <code>node_modules</code> and <code>package-lock.json</code>) and downloads the .zip files. Install this first on every node: <code>sudo apt update && sudo apt install -y zip unzip</code>.</p>
 
   <% if (nodes.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Nombre</th><th>IP</th><th>Usuario</th><th>Panel asociado</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Name</th><th>IP</th><th>User</th><th>Linked panel</th><th>Actions</th></tr></thead>
       <tbody>
         <% nodes.forEach(n => { %>
         <tr>
           <td><b><%= n.name %></b></td>
           <td><%= n.host %>:<%= n.ssh_port %></td>
           <td><%= n.ssh_user %></td>
-          <td class="muted"><%= n.panel_name || 'Sin panel' %></td>
+          <td class="muted"><%= n.panel_name || 'No panel' %></td>
           <td class="row-actions">
             <% if (can('manage_nodes')) { %>
-            <button class="btn btn-sm" type="button" onclick="testConnection('/nodes/<%= n.id %>/test', this)" title="Probar conexión"><i data-lucide="plug-zap"></i></button>
-            <button class="btn btn-sm" type="button" onclick="openDialog('node-edit-<%= n.id %>')" title="Editar / cambiar contraseña"><i data-lucide="pencil"></i></button>
-            <form method="post" action="/nodes/<%= n.id %>/delete" class="inline" data-confirm="¿Eliminar el nodo &quot;<%= n.name %>&quot;? Sus copias ya descargadas se conservan.">
-              <button class="btn btn-sm btn-danger" type="submit" title="Eliminar nodo"><i data-lucide="trash-2"></i></button>
+            <button class="btn btn-sm" type="button" onclick="testConnection('/nodes/<%= n.id %>/test', this)" title="Test connection"><i data-lucide="plug-zap"></i></button>
+            <button class="btn btn-sm" type="button" onclick="openDialog('node-edit-<%= n.id %>')" title="Edit / change password"><i data-lucide="pencil"></i></button>
+            <form method="post" action="/nodes/<%= n.id %>/delete" class="inline" data-confirm="Delete the node &quot;<%= n.name %>&quot;? Its downloaded backups are kept.">
+              <button class="btn btn-sm btn-danger" type="submit" title="Delete node"><i data-lucide="trash-2"></i></button>
             </form>
             <% } %>
           </td>
@@ -137,100 +86,76 @@
     </table>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>Todavía no hay nodos. Agrega el primero aquí abajo.</p>
+  <p class="empty"><i data-lucide="inbox"></i>No nodes yet. Add the first one below.</p>
   <% } %>
 
   <% if (can('manage_nodes')) { %>
-  <h3 class="sub-title">Agregar nodo</h3>
+  <h3 class="sub-title">Add node</h3>
   <form method="post" action="/nodes" class="form-grid">
-    <label>Nombre del nodo<input name="name" required placeholder="Nodo 1 - Alemania"></label>
-    <label>IP del nodo<input name="host" required placeholder="203.0.113.20"></label>
-    <label>Puerto SSH<input name="ssh_port" type="number" value="22"></label>
-    <label>Usuario SSH<input name="ssh_user" value="root"></label>
-    <label>Contraseña SSH<input name="ssh_password" type="password" required placeholder="Contraseña SSH"></label>
-    <label>Panel al que pertenece
+    <label>Node name<input name="name" required placeholder="Node 1 - Germany"></label>
+    <label>Node IP<input name="host" required placeholder="203.0.113.20"></label>
+    <label>SSH port<input name="ssh_port" type="number" value="22"></label>
+    <label>SSH user<input name="ssh_user" value="root"></label>
+    <label>SSH password<input name="ssh_password" type="password" required placeholder="SSH password"></label>
+    <label>Belongs to panel
       <select name="panel_id">
-        <% if (!panels.length) { %><option value="">Sin panel (no recomendado)</option><% } %>
+        <% if (!panels.length) { %><option value="">No panel (not recommended)</option><% } %>
         <% panels.forEach(p => { %><option value="<%= p.id %>"><%= p.name %></option><% }) %>
       </select>
     </label>
     <div class="form-actions">
-      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Agregar nodo</button>
+      <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Add node</button>
     </div>
   </form>
   <% } %>
 </section>
 
 <% if (can('manage_nodes')) { %>
-  <%# ----- Modales de edición de Paymenter ----- %>
-  <% paymenters.forEach(pm => { %>
-  <dialog id="paymenter-edit-<%= pm.id %>" class="modal">
-    <form method="post" action="/paymenters/<%= pm.id %>/update" class="form">
-      <h2><i data-lucide="pencil"></i>Editar Paymenter: <%= pm.name %></h2>
-      <div class="form-grid">
-        <label>Nombre<input name="name" required value="<%= pm.name %>"></label>
-        <label>IP<input name="host" required value="<%= pm.host %>"></label>
-        <label>Puerto SSH<input name="ssh_port" type="number" value="<%= pm.ssh_port %>"></label>
-        <label>Usuario SSH<input name="ssh_user" value="<%= pm.ssh_user %>"></label>
-        <label>Nueva contraseña SSH<input name="ssh_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
-        <label>Usuario de la BD<input name="db_user" value="<%= pm.db_user %>"></label>
-        <label>Nueva contraseña de la BD<input name="db_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
-        <label>Nombre de la BD<input name="db_name" value="<%= pm.db_name %>"></label>
-        <label>Ruta del archivo .env<input name="env_path" value="<%= pm.env_path %>"></label>
-      </div>
-      <div class="form-actions">
-        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
-        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar cambios</button>
-      </div>
-    </form>
-  </dialog>
-  <% }) %>
-
-  <%# ----- Modales de edición de paneles ----- %>
+  <%# ----- Panel edit modals ----- %>
   <% panels.forEach(p => { %>
   <dialog id="panel-edit-<%= p.id %>" class="modal">
     <form method="post" action="/panels/<%= p.id %>/update" class="form">
-      <h2><i data-lucide="pencil"></i>Editar panel: <%= p.name %></h2>
+      <h2><i data-lucide="pencil"></i>Edit panel: <%= p.name %></h2>
       <div class="form-grid">
-        <label>Nombre<input name="name" required value="<%= p.name %>"></label>
+        <label>Name<input name="name" required value="<%= p.name %>"></label>
         <label>IP<input name="host" required value="<%= p.host %>"></label>
-        <label>Puerto SSH<input name="ssh_port" type="number" value="<%= p.ssh_port %>"></label>
-        <label>Usuario SSH<input name="ssh_user" value="<%= p.ssh_user %>"></label>
-        <label>Nueva contraseña SSH<input name="ssh_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
-        <label>Usuario de la BD<input name="db_user" value="<%= p.db_user %>"></label>
-        <label>Nueva contraseña de la BD<input name="db_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
-        <label>Nombre de la BD<input name="db_name" value="<%= p.db_name %>"></label>
-        <label>Ruta del archivo .env<input name="env_path" value="<%= p.env_path %>"></label>
+        <label>SSH port<input name="ssh_port" type="number" value="<%= p.ssh_port %>"></label>
+        <label>SSH user<input name="ssh_user" value="<%= p.ssh_user %>"></label>
+        <label>New SSH password<input name="ssh_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
+        <label>Database user<input name="db_user" value="<%= p.db_user %>"></label>
+        <label>New database password<input name="db_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
+        <label>Database name<input name="db_name" value="<%= p.db_name %>"></label>
+        <label>.env file path<input name="env_path" value="<%= p.env_path %>"></label>
       </div>
       <div class="form-actions">
-        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
-        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar cambios</button>
+        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Save changes</button>
       </div>
     </form>
   </dialog>
   <% }) %>
 
-  <%# ----- Modales de edición de nodos ----- %>
+  <%# ----- Node edit modals ----- %>
   <% nodes.forEach(n => { %>
   <dialog id="node-edit-<%= n.id %>" class="modal">
     <form method="post" action="/nodes/<%= n.id %>/update" class="form">
-      <h2><i data-lucide="pencil"></i>Editar nodo: <%= n.name %></h2>
+      <h2><i data-lucide="pencil"></i>Edit node: <%= n.name %></h2>
       <div class="form-grid">
-        <label>Nombre<input name="name" required value="<%= n.name %>"></label>
+        <label>Name<input name="name" required value="<%= n.name %>"></label>
         <label>IP<input name="host" required value="<%= n.host %>"></label>
-        <label>Puerto SSH<input name="ssh_port" type="number" value="<%= n.ssh_port %>"></label>
-        <label>Usuario SSH<input name="ssh_user" value="<%= n.ssh_user %>"></label>
-        <label>Nueva contraseña SSH<input name="ssh_password" type="password" placeholder="(guardada, deja vacío para no cambiarla)"></label>
-        <label>Panel al que pertenece
+        <label>SSH port<input name="ssh_port" type="number" value="<%= n.ssh_port %>"></label>
+        <label>SSH user<input name="ssh_user" value="<%= n.ssh_user %>"></label>
+        <label>New SSH password<input name="ssh_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
+        <label>Belongs to panel
           <select name="panel_id">
-            <option value="" <%= !n.panel_id ? 'selected' : '' %>>Sin panel</option>
+            <option value="" <%= !n.panel_id ? 'selected' : '' %>>No panel</option>
             <% panels.forEach(p => { %><option value="<%= p.id %>" <%= n.panel_id === p.id ? 'selected' : '' %>><%= p.name %></option><% }) %>
           </select>
         </label>
       </div>
       <div class="form-actions">
-        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
-        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Guardar cambios</button>
+        <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Save changes</button>
       </div>
     </form>
   </dialog>

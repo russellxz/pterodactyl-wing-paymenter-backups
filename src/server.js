@@ -36,7 +36,7 @@ app.use(sessionMiddleware);
 io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, () => {
     if (socket.request.session && socket.request.session.admin) next();
-    else next(new Error('No autorizado'));
+    else next(new Error('Unauthorized'));
   });
 });
 
@@ -68,10 +68,10 @@ app.use((req, res, next) => {
   // Si no hay Origin ni Referer (algunos clientes legítimos), exigimos sesión.
   if (!sourceHost) {
     if (req.session && req.session.admin) return next();
-    return res.status(403).send('Solicitud bloqueada (sin origen valido).');
+    return res.status(403).send('Request blocked (no valid origin).');
   }
   if (sourceHost !== host) {
-    return res.status(403).send('Solicitud bloqueada (origen no permitido).');
+    return res.status(403).send('Request blocked (origin not allowed).');
   }
   next();
 });
@@ -112,9 +112,9 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 server.listen(PORT, HOST, () => {
   const admins = db.prepare('SELECT COUNT(*) AS c FROM admins').get().c;
-  logger.info(`PteroBackups iniciado en http://${HOST}:${PORT}`);
+  logger.info(`PteroBackups started at http://${HOST}:${PORT}`);
   if (admins === 0) {
-    console.log('\nAVISO: todavía no hay administradores. Crea el primero con:  npm run create-admin\n');
+    console.log('\nNOTICE: there are no administrators yet. Create the first one with:  npm run create-admin\n');
   }
   scheduler.start();
 });

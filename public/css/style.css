@@ -69,17 +69,26 @@ svg { width: 16px; height: 16px; flex-shrink: 0; }
   height: 100vh;
 }
 
-.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
-.brand-mark {
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  background: var(--accent-soft);
-  border: 1px solid rgba(240, 163, 60, 0.35);
-  border-radius: 9px;
+.brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 18px; }
+.brand-logo {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(240, 163, 60, 0.4);
+  box-shadow: 0 0 0 3px rgba(240, 163, 60, 0.1), 0 4px 14px rgba(0, 0, 0, 0.4);
+  background: #0b101c;
+  object-fit: cover;
 }
-.brand-mark svg { width: 18px; height: 18px; color: var(--accent); }
-.brand-name { font-family: var(--font-display); font-size: 17px; font-weight: 500; }
+.brand-text { display: flex; flex-direction: column; min-width: 0; }
+.brand-name { font-family: var(--font-display); font-size: 17px; font-weight: 500; line-height: 1.2; }
 .brand-name b { color: var(--accent); font-weight: 700; }
+.brand-tag {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 .nav { display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .nav a {
@@ -92,6 +101,17 @@ svg { width: 16px; height: 16px; flex-shrink: 0; }
 .nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
 .nav a.active { background: var(--accent-soft); color: var(--accent-strong); }
 .nav a.active svg { color: var(--accent); }
+.nav-group {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5d6a82;
+  padding: 12px 11px 4px;
+}
+.nav a.nav-paymenter svg { color: #6fdcd4; }
+.nav a.nav-paymenter.active { background: rgba(78, 205, 196, 0.12); color: #6fdcd4; }
+.nav a.nav-paymenter.active svg { color: #6fdcd4; }
 
 .sidebar-footer {
   border-top: 1px solid var(--border);
@@ -325,6 +345,17 @@ tbody tr:last-child td { border-bottom: none; }
 .empty { display: flex; align-items: center; gap: 9px; color: var(--muted); padding: 14px 4px; }
 .kv { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
 .sub-title { font-size: 14px; margin: 18px 0 4px; color: var(--accent-strong); }
+.title-pay {
+  display: inline-grid; place-items: center;
+  width: 34px; height: 34px;
+  background: rgba(78, 205, 196, 0.12);
+  border: 1px solid rgba(78, 205, 196, 0.4);
+  border-radius: 9px;
+  margin-right: 10px;
+  vertical-align: -7px;
+}
+.title-pay svg { width: 18px; height: 18px; color: #6fdcd4; }
+.stats-grid-3 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
 .guide-list { list-style: none; counter-reset: paso; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .guide-list li { display: flex; gap: 13px; counter-increment: paso; align-items: flex-start; }
@@ -400,30 +431,106 @@ dialog.modal::backdrop { background: rgba(5, 8, 15, 0.7); }
 .log-time { color: #5d6a82; white-space: nowrap; }
 .log-level { font-weight: 700; width: 50px; flex-shrink: 0; }
 .log-INFO .log-level { color: var(--ok); }
-.log-AVISO .log-level { color: var(--accent-strong); }
+.log-WARN .log-level, .log-AVISO .log-level { color: var(--accent-strong); }
 .log-ERROR .log-level { color: var(--danger); }
 .log-msg { word-break: break-word; }
 
-/* ----- Inicio de sesión ----- */
+/* ----- Inicio de sesión -----
+   El fondo tiene dos resplandores (ámbar y azul) que reflejan las dos
+   mitades del logo: Pterodactyl (naranja) y Paymenter (azul). */
 .login-body {
   display: grid; place-items: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 20px;
   background:
-    radial-gradient(800px 420px at 50% -10%, rgba(240, 163, 60, 0.1), transparent 65%),
+    radial-gradient(640px 460px at 18% 8%, rgba(240, 163, 60, 0.13), transparent 62%),
+    radial-gradient(640px 460px at 84% 92%, rgba(59, 108, 224, 0.16), transparent 62%),
     var(--bg);
 }
 .login-card {
-  background: var(--surface);
+  position: relative;
+  background: linear-gradient(180deg, rgba(28, 37, 56, 0.65), rgba(21, 28, 44, 0.95));
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 30px 28px;
-  width: min(400px, 100%);
+  border-radius: 20px;
+  padding: 58px 30px 26px;
+  width: min(410px, 100%);
+  margin-top: 46px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
 }
-.login-brand { justify-content: center; padding-bottom: 4px; }
-.login-sub { text-align: center; color: var(--muted); margin: 0 0 18px; font-size: 13px; }
-.login-sub b { color: var(--accent-strong); font-weight: 600; }
-.login-hint { color: var(--muted); font-size: 12.5px; margin: 16px 0 0; text-align: center; }
+.login-logo-wrap {
+  position: absolute;
+  top: -46px; left: 50%;
+  transform: translateX(-50%);
+  width: 92px; height: 92px;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, rgba(240, 163, 60, 0.85), rgba(59, 108, 224, 0.85));
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55), 0 0 44px rgba(240, 163, 60, 0.16);
+}
+.login-logo {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  display: block;
+  background: #0b101c;
+  object-fit: cover;
+}
+.login-title {
+  text-align: center;
+  font-size: 25px;
+  font-weight: 500;
+  margin: 4px 0 2px;
+}
+.login-title b { color: var(--accent); font-weight: 700; }
+.login-sub {
+  text-align: center;
+  color: var(--muted);
+  margin: 0 0 20px;
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.login-sub .w-ptero { color: var(--accent-strong); font-weight: 600; }
+.login-sub .w-pay { color: #7ba4ff; font-weight: 600; }
+.input-icon { position: relative; display: block; }
+.input-icon svg {
+  position: absolute;
+  left: 12px; top: 50%;
+  transform: translateY(-50%);
+  width: 15px; height: 15px;
+  color: #5d6a82;
+  pointer-events: none;
+}
+.input-icon input { padding-left: 37px; }
+.btn-login {
+  margin-top: 4px;
+  padding: 11px 14px;
+  font-size: 14.5px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  border: none;
+  box-shadow: 0 6px 20px rgba(240, 163, 60, 0.22);
+}
+.btn-login:hover { background: linear-gradient(90deg, var(--accent-strong), var(--accent-strong)); }
+.login-badges {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.login-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(14, 19, 32, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 4px 11px;
+}
+.login-badge svg { width: 12px; height: 12px; color: var(--accent); }
+.login-badge-pay svg { color: #6fdcd4; }
+.login-hint { color: #5d6a82; font-size: 12px; margin: 16px 0 0; text-align: center; }
 
 /* ----- Barra superior (solo móvil) ----- */
 .topbar { display: none; }
@@ -439,6 +546,7 @@ dialog.modal::backdrop { background: rgba(5, 8, 15, 0.7); }
 }
 .menu-btn svg { width: 19px; height: 19px; }
 .topbar-brand { padding: 0; flex: 1; min-width: 0; }
+.topbar-brand .brand-logo { width: 32px; height: 32px; box-shadow: none; }
 .topbar .logout { flex-shrink: 0; }
 
 .sidebar-backdrop {

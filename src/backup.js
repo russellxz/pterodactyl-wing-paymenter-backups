@@ -63,8 +63,8 @@ function setJob(patch) {
 function requestCancel() {
   if (!job.active) return false;
   job.cancelRequested = true;
-  setJob({ message: 'Cancelando... se detendrá al terminar el servidor actual.' });
-  logger.warn('Cancelación de la tarea solicitada por un administrador.');
+  setJob({ message: 'Canceling... it will stop after the current server finishes.' });
+  logger.warn('Task cancellation requested by an administrator.');
   return true;
 }
 
@@ -78,7 +78,7 @@ function sanitize(text) {
     .replace(/[^A-Za-z0-9.@-]+/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
-    .slice(0, 60) || 'sin_nombre';
+    .slice(0, 60) || 'unnamed';
 }
 
 function stamp() {
@@ -146,22 +146,22 @@ async function backupNode(node, meta) {
     const list = await exec(conn, `ls -1 ${VOLUMES_PATH} 2>/dev/null || true`);
     const uuids = list.split('\n').map((s) => s.trim()).filter((s) => UUID_RE.test(s));
     if (!uuids.length) {
-      logger.warn(`Nodo "${node.name}": no se encontraron servidores en ${VOLUMES_PATH}.`);
+      logger.warn(`Node "${node.name}": no servers found in ${VOLUMES_PATH}.`);
       return;
     }
 
     const snap = db.prepare("INSERT INTO snapshots (node_id, status) VALUES (?, 'running')").run(node.id);
     const snapshotId = snap.lastInsertRowid;
     setJob({ total: job.total + uuids.length });
-    logger.info(`Nodo "${node.name}": ${uuids.length} servidores encontrados. Creando fecha de copia...`);
+    logger.info(`Node "${node.name}": ${uuids.length} servers found. Creating backup date...`);
 
     let i = 0;
     let saved = 0;
     for (const uuid of uuids) {
       if (job.cancelRequested) break;
       i++;
-      const m = meta[uuid] || { server_name: uuid, owner_name: 'Desconocido', owner_email: 'desconocido' };
-      setJob({ message: `Nodo ${node.name}: copiando "${m.server_name}" (${i}/${uuids.length})` });
+      const m = meta[uuid] || { server_name: uuid, owner_name: 'Unknown', owner_email: 'unknown' };
+      setJob({ message: `Node ${node.name}: backing up "${m.server_name}" (${i}/${uuids.length})` });
       try {
         const remoteZip = `/tmp/pb_${uuid}_${Date.now()}.zip`;
         const vol = `${VOLUMES_PATH}/${uuid}`;
@@ -170,7 +170,7 @@ async function backupNode(node, meta) {
           `cd ${sq(vol)} && (zip -ryq ${sq(remoteZip)} . ${ZIP_EXCLUDE_ALL} >/dev/null 2>&1; if [ -f ${sq(remoteZip)} ]; then echo OK; else echo VACIO; fi)`
         );
         if (result.trim() !== 'OK') {
-          logger.warn(`Servidor "${m.server_name}" (${uuid}) está vacío, se omite.`);
+          logger.warn(`Server "${m.server_name}" (${uuid}) is empty, skipping.`);
           setJob({ current: job.current + 1 });
           continue;
         }
@@ -185,17 +185,17 @@ async function backupNode(node, meta) {
         `).run(node.id, snapshotId, uuid, m.server_name, m.owner_name, m.owner_email, filename, size);
         saved++;
       } catch (e) {
-        logger.error(`Error copiando "${m.server_name}" (${uuid}) en nodo "${node.name}": ${e.message}`);
+        logger.error(`Error backing up "${m.server_name}" (${uuid}) on node "${node.name}": ${e.message}`);
       }
       setJob({ current: job.current + 1 });
     }
 
     if (saved === 0) {
       db.prepare('DELETE FROM snapshots WHERE id = ?').run(snapshotId);
-      logger.warn(`Nodo "${node.name}": la fecha de copia quedó vacía y se descartó.`);
+      logger.warn(`Node "${node.name}": the backup date ended up empty and was discarded.`);
     } else {
       db.prepare('UPDATE snapshots SET status = ? WHERE id = ?').run(job.cancelRequested ? 'canceled' : 'complete', snapshotId);
-      logger.info(`Nodo "${node.name}": fecha de copia ${job.cancelRequested ? 'CANCELADA con' : 'completada con'} ${saved} servidores guardados.`);
+      logger.info(`Node "${node.name}": backup date ${job.cancelRequested ? 'CANCELED with' : 'completed with'} ${saved} servers saved.`);
     }
   });
 }
@@ -204,7 +204,7 @@ async function backupNode(node, meta) {
 // Copia de la base de datos de UN panel (mysqldump) + su archivo .env
 // ---------------------------------------------------------------------------
 async function backupPanelDb(p) {
-  setJob({ message: `Copiando la base de datos del panel "${p.name}"...` });
+  setJob({ message: `Backing up the database of panel "${p.name}"...` });
   const base = `pb_panel_${Date.now()}`;
   const remoteSql = `/tmp/${base}.sql`;
   const remoteEnv = `/tmp/${base}.env`;
@@ -224,7 +224,7 @@ async function backupPanelDb(p) {
     if (hasEnv) {
       await download(conn, remoteEnv, path.join(ENV_DIR, `env_${sanitize(p.name)}_${stamp()}.env`)).catch(() => {});
     } else {
-      logger.warn(`Panel "${p.name}": no se encontró el archivo .env en ${p.env_path}.`);
+      logger.warn(`Panel "${p.name}": .env file not found at ${p.env_path}.`);
     }
     await exec(conn, `rm -f ${sq(remoteSql)} ${sq(remoteEnv)} ${sq(remoteZip)}`).catch(() => {});
 
@@ -232,8 +232,8 @@ async function backupPanelDb(p) {
     db.prepare(`
       INSERT INTO backups (type, panel_id, server_name, owner_name, owner_email, filename, size)
       VALUES ('panel_db', ?, ?, '—', '—', ?, ?)
-    `).run(p.id, `BD del panel: ${p.name}`, filename, size);
-    logger.info(`Copia de la BD del panel "${p.name}" creada (${filename}).`);
+    `).run(p.id, `Panel DB: ${p.name}`, filename, size);
+    logger.info(`Panel database backup for "${p.name}" created (${filename}).`);
   });
 }
 
@@ -242,7 +242,7 @@ async function backupPanelDb(p) {
 // (misma mecánica que la BD del panel, pero en su propia carpeta y tipo)
 // ---------------------------------------------------------------------------
 async function backupPaymenterDb(pm) {
-  setJob({ message: `Copiando la base de datos de Paymenter "${pm.name}"...` });
+  setJob({ message: `Backing up the Paymenter database "${pm.name}"...` });
   const base = `pb_paymenter_${Date.now()}`;
   const remoteSql = `/tmp/${base}.sql`;
   const remoteEnv = `/tmp/${base}.env`;
@@ -262,7 +262,7 @@ async function backupPaymenterDb(pm) {
     if (hasEnv) {
       await download(conn, remoteEnv, path.join(PAYMENTER_ENV_DIR, `env_${sanitize(pm.name)}_${stamp()}.env`)).catch(() => {});
     } else {
-      logger.warn(`Paymenter "${pm.name}": no se encontró el archivo .env en ${pm.env_path}.`);
+      logger.warn(`Paymenter "${pm.name}": .env file not found at ${pm.env_path}.`);
     }
     await exec(conn, `rm -f ${sq(remoteSql)} ${sq(remoteEnv)} ${sq(remoteZip)}`).catch(() => {});
 
@@ -270,8 +270,8 @@ async function backupPaymenterDb(pm) {
     db.prepare(`
       INSERT INTO backups (type, paymenter_id, server_name, owner_name, owner_email, filename, size)
       VALUES ('paymenter_db', ?, ?, '—', '—', ?, ?)
-    `).run(pm.id, `BD de Paymenter: ${pm.name}`, filename, size);
-    logger.info(`Copia de la BD de Paymenter "${pm.name}" creada (${filename}).`);
+    `).run(pm.id, `Paymenter DB: ${pm.name}`, filename, size);
+    logger.info(`Paymenter database backup for "${pm.name}" created (${filename}).`);
   });
 }
 
@@ -282,21 +282,21 @@ async function backupPaymenterDb(pm) {
 // opts.nodeId / opts.panelId / opts.paymenterId opcionales
 // ---------------------------------------------------------------------------
 async function runBackup(opts = {}) {
-  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine o cancélala.');
+  if (job.active) throw new Error('A task is already running. Wait for it to finish or cancel it.');
   const target = opts.target || getSetting('backup_target', 'both');
-  setJob({ active: true, name: 'Copia de seguridad', message: 'Iniciando...', current: 0, total: 0, cancelRequested: false, target_uuid: null });
+  setJob({ active: true, name: 'Backup', message: 'Starting...', current: 0, total: 0, cancelRequested: false, target_uuid: null });
   try {
     // 1) Bases de datos de los paneles (cada una por separado)
     if (target === 'panel' || target === 'both' || target === 'all') {
       const panels = opts.panelId ? [getPanel(opts.panelId)].filter(Boolean) : getPanels();
-      if (!panels.length) logger.warn('No hay paneles configurados para copiar su base de datos.');
+      if (!panels.length) logger.warn('No panels configured to back up their database.');
       setJob({ total: job.total + panels.length });
       for (const p of panels) {
         if (job.cancelRequested) break;
         try {
           await backupPanelDb(p);
         } catch (e) {
-          logger.error(`Error en la copia de la BD del panel "${p.name}": ${e.message}`);
+          logger.error(`Error backing up the database of panel "${p.name}": ${e.message}`);
         }
         setJob({ current: job.current + 1 });
       }
@@ -306,14 +306,14 @@ async function runBackup(opts = {}) {
     //     con la lógica del panel ni de los nodos: es un bloque aparte.
     if (target === 'paymenter' || target === 'all') {
       const paymenters = opts.paymenterId ? [getPaymenter(opts.paymenterId)].filter(Boolean) : getPaymenters();
-      if (!paymenters.length) logger.warn('No hay instalaciones de Paymenter configuradas para copiar su base de datos.');
+      if (!paymenters.length) logger.warn('No Paymenter installations configured to back up their database.');
       setJob({ total: job.total + paymenters.length });
       for (const pm of paymenters) {
         if (job.cancelRequested) break;
         try {
           await backupPaymenterDb(pm);
         } catch (e) {
-          logger.error(`Error en la copia de la BD de Paymenter "${pm.name}": ${e.message}`);
+          logger.error(`Error backing up the Paymenter database "${pm.name}": ${e.message}`);
         }
         setJob({ current: job.current + 1 });
       }
@@ -324,7 +324,7 @@ async function runBackup(opts = {}) {
       const nodes = opts.nodeId
         ? [db.prepare('SELECT * FROM nodes WHERE id = ?').get(opts.nodeId)].filter(Boolean)
         : db.prepare('SELECT * FROM nodes').all();
-      if (!nodes.length) logger.warn('No hay nodos configurados para copiar.');
+      if (!nodes.length) logger.warn('No nodes configured to back up.');
 
       const metaCache = {}; // panel_id -> meta (para no consultar el mismo panel dos veces)
       for (const node of nodes) {
@@ -334,29 +334,29 @@ async function runBackup(opts = {}) {
         if (panelId) {
           if (!(panelId in metaCache)) {
             const p = getPanel(panelId);
-            setJob({ message: `Leyendo usuarios y servidores del panel "${p ? p.name : panelId}"...` });
+            setJob({ message: `Reading users and servers from panel "${p ? p.name : panelId}"...` });
             try {
               metaCache[panelId] = p ? await getPanelMeta(p) : {};
             } catch (e) {
               metaCache[panelId] = {};
-              logger.warn(`No se pudo leer la BD del panel (las copias se nombrarán con el UUID): ${e.message}`);
+              logger.warn(`Could not read the panel database (backups will be named by UUID): ${e.message}`);
             }
           }
           meta = metaCache[panelId];
         } else {
-          logger.warn(`El nodo "${node.name}" no tiene panel asociado: las copias se nombrarán con el UUID.`);
+          logger.warn(`Node "${node.name}" has no linked panel: backups will be named by UUID.`);
         }
         try {
           await backupNode(node, meta);
         } catch (e) {
-          logger.error(`Error en el nodo "${node.name}": ${e.message}`);
+          logger.error(`Error on node "${node.name}": ${e.message}`);
         }
       }
     }
 
-    logger.info(job.cancelRequested ? 'Tarea CANCELADA por el administrador.' : 'Tarea de copias finalizada.');
+    logger.info(job.cancelRequested ? 'Task CANCELED by the administrator.' : 'Backup task finished.');
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+    setJob({ active: false, message: 'Finished', current: 0, total: 0, name: null, cancelRequested: false });
   }
 }
 
@@ -365,22 +365,22 @@ async function runBackup(opts = {}) {
 // ---------------------------------------------------------------------------
 async function restoreServer(backupId, wipe = false) {
   const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'server'").get(backupId);
-  if (!b) throw new Error('La copia no existe.');
-  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
-  setJob({ active: true, name: 'Restauración', message: `Restaurando "${b.server_name}"...`, current: 0, total: 1, cancelRequested: false, target_uuid: b.server_uuid });
+  if (!b) throw new Error('That backup does not exist.');
+  if (job.active) throw new Error('A task is already running. Wait for it to finish.');
+  setJob({ active: true, name: 'Restore', message: `Restoring "${b.server_name}"...`, current: 0, total: 1, cancelRequested: false, target_uuid: b.server_uuid });
   try {
     await restoreServerRow(b, wipe);
     setJob({ current: 1 });
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false, target_uuid: null });
+    setJob({ active: false, message: 'Finished', current: 0, total: 0, name: null, cancelRequested: false, target_uuid: null });
   }
 }
 
 async function restoreServerRow(b, wipe) {
   const node = db.prepare('SELECT * FROM nodes WHERE id = ?').get(b.node_id);
-  if (!node) throw new Error(`El nodo de la copia "${b.server_name}" ya no existe en el sistema.`);
+  if (!node) throw new Error(`The node of the "${b.server_name}" backup no longer exists in the system.`);
   const localPath = backupFilePath(b);
-  if (!fs.existsSync(localPath)) throw new Error(`El archivo ${b.filename} ya no existe en el disco.`);
+  if (!fs.existsSync(localPath)) throw new Error(`The file ${b.filename} no longer exists on disk.`);
 
   await withConn(nodeSsh(node), async (conn) => {
     const vol = `${VOLUMES_PATH}/${b.server_uuid}`;
@@ -390,7 +390,7 @@ async function restoreServerRow(b, wipe) {
       // restauró la BD del panel: Wings eliminó la carpeta al borrar el servidor.
       // En vez de fallar, creamos la carpeta y restauramos dentro.
       await exec(conn, `mkdir -p ${sq(vol)}`);
-      logger.warn(`El volumen de "${b.server_name}" no existía en el nodo: se creó de nuevo. Reinicia Wings en ese nodo (systemctl restart wings) para que el panel vuelva a conectar con el servidor.`);
+      logger.warn(`The volume for "${b.server_name}" did not exist on the node: it was created again. Restart Wings on that node (systemctl restart wings) so the panel reconnects to the server.`);
     }
 
     const remoteZip = `/tmp/pb_restore_${Date.now()}.zip`;
@@ -399,7 +399,7 @@ async function restoreServerRow(b, wipe) {
     await exec(conn, `unzip -oq ${sq(remoteZip)} -d ${sq(vol)}`);
     await exec(conn, `chown -R pterodactyl:pterodactyl ${sq(vol)} 2>/dev/null || true; rm -f ${sq(remoteZip)}`).catch(() => {});
   });
-  logger.info(`Restaurado "${b.server_name}" (${b.owner_email}).`);
+  logger.info(`Restored "${b.server_name}" (${b.owner_email}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -408,28 +408,28 @@ async function restoreServerRow(b, wipe) {
 // ---------------------------------------------------------------------------
 async function restoreSnapshot(snapshotId, wipe = false) {
   const snap = db.prepare('SELECT * FROM snapshots WHERE id = ?').get(snapshotId);
-  if (!snap) throw new Error('La fecha de copia no existe.');
+  if (!snap) throw new Error('That backup date does not exist.');
   const rows = db.prepare("SELECT * FROM backups WHERE snapshot_id = ? AND type = 'server'").all(snapshotId);
-  if (!rows.length) throw new Error('Esta fecha de copia no tiene servidores guardados.');
-  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  if (!rows.length) throw new Error('This backup date has no saved servers.');
+  if (job.active) throw new Error('A task is already running. Wait for it to finish.');
 
-  setJob({ active: true, name: 'Restauración de fecha', message: 'Iniciando...', current: 0, total: rows.length, cancelRequested: false, target_uuid: null });
+  setJob({ active: true, name: 'Date restore', message: 'Starting...', current: 0, total: rows.length, cancelRequested: false, target_uuid: null });
   try {
     for (const b of rows) {
       if (job.cancelRequested) break;
-      setJob({ message: `Restaurando "${b.server_name}" (${job.current + 1}/${rows.length})` });
+      setJob({ message: `Restoring "${b.server_name}" (${job.current + 1}/${rows.length})` });
       try {
         await restoreServerRow(b, wipe);
       } catch (e) {
-        logger.error(`No se pudo restaurar "${b.server_name}": ${e.message}`);
+        logger.error(`Could not restore "${b.server_name}": ${e.message}`);
       }
       setJob({ current: job.current + 1 });
     }
     logger.info(job.cancelRequested
-      ? 'Restauración de la fecha CANCELADA por el administrador.'
-      : `Restauración de la fecha ${snap.created_at} finalizada (${rows.length} servidores).`);
+      ? 'Date restore CANCELED by the administrator.'
+      : `Restore of the ${snap.created_at} date finished (${rows.length} servers).`);
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+    setJob({ active: false, message: 'Finished', current: 0, total: 0, name: null, cancelRequested: false });
   }
 }
 
@@ -438,10 +438,10 @@ async function restoreSnapshot(snapshotId, wipe = false) {
 // ---------------------------------------------------------------------------
 async function restorePanelDb(backupId, target = null) {
   const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'panel_db'").get(backupId);
-  if (!b) throw new Error('La copia de la base de datos no existe.');
+  if (!b) throw new Error('That database backup does not exist.');
   const localPath = backupFilePath(b);
-  if (!fs.existsSync(localPath)) throw new Error('El archivo .zip ya no existe en el disco.');
-  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  if (!fs.existsSync(localPath)) throw new Error('The .zip file no longer exists on disk.');
+  if (job.active) throw new Error('A task is already running. Wait for it to finish.');
 
   let cfg, dbUser, dbPass, dbName, label;
   if (target && target.host) {
@@ -452,7 +452,7 @@ async function restorePanelDb(backupId, target = null) {
     label = target.host;
   } else {
     const p = (b.panel_id && getPanel(b.panel_id)) || getPanels()[0];
-    if (!p) throw new Error('El panel de esta copia ya no está configurado. Usa la opción "Otro VPS" con sus datos.');
+    if (!p) throw new Error('The panel of this backup is no longer configured. Use the "Another VPS" option with its details.');
     cfg = panelSsh(p);
     dbUser = p.db_user;
     dbPass = decrypt(p.db_password);
@@ -460,7 +460,7 @@ async function restorePanelDb(backupId, target = null) {
     label = `${p.name} (${p.host})`;
   }
 
-  setJob({ active: true, name: 'Restauración de BD', message: `Restaurando BD en ${label}...`, current: 0, total: 1, cancelRequested: false });
+  setJob({ active: true, name: 'Database restore', message: `Restoring database on ${label}...`, current: 0, total: 1, cancelRequested: false });
   try {
     await withConn(cfg, async (conn) => {
       const dir = `/tmp/pb_dbrestore_${Date.now()}`;
@@ -469,14 +469,14 @@ async function restorePanelDb(backupId, target = null) {
       await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
       await exec(
         conn,
-        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "El zip no contiene un .sql" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
       );
       await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
     });
     setJob({ current: 1 });
-    logger.info(`Base de datos restaurada en ${label}. Si habías borrado servidores, reinicia Wings en cada nodo (systemctl restart wings) para que el panel reconecte con ellos, y después restaura sus archivos. El .zip también incluye el archivo .env por si necesitas restaurarlo a mano.`);
+    logger.info(`Database restored on ${label}. If you had deleted servers, restart Wings on every node (systemctl restart wings) so the panel reconnects to them, then restore their files. The .zip also includes the .env file in case you need to restore it manually.`);
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+    setJob({ active: false, message: 'Finished', current: 0, total: 0, name: null, cancelRequested: false });
   }
 }
 
@@ -485,10 +485,10 @@ async function restorePanelDb(backupId, target = null) {
 // ---------------------------------------------------------------------------
 async function restorePaymenterDb(backupId, target = null) {
   const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'paymenter_db'").get(backupId);
-  if (!b) throw new Error('La copia de la base de datos de Paymenter no existe.');
+  if (!b) throw new Error('That Paymenter database backup does not exist.');
   const localPath = backupFilePath(b);
-  if (!fs.existsSync(localPath)) throw new Error('El archivo .zip ya no existe en el disco.');
-  if (job.active) throw new Error('Ya hay una tarea en ejecución. Espera a que termine.');
+  if (!fs.existsSync(localPath)) throw new Error('The .zip file no longer exists on disk.');
+  if (job.active) throw new Error('A task is already running. Wait for it to finish.');
 
   let cfg, dbUser, dbPass, dbName, label;
   if (target && target.host) {
@@ -499,7 +499,7 @@ async function restorePaymenterDb(backupId, target = null) {
     label = target.host;
   } else {
     const pm = (b.paymenter_id && getPaymenter(b.paymenter_id)) || getPaymenters()[0];
-    if (!pm) throw new Error('El Paymenter de esta copia ya no está configurado. Usa la opción "Otro VPS" con sus datos.');
+    if (!pm) throw new Error('The Paymenter of this backup is no longer configured. Use the "Another VPS" option with its details.');
     cfg = panelSsh(pm);
     dbUser = pm.db_user;
     dbPass = decrypt(pm.db_password);
@@ -507,7 +507,7 @@ async function restorePaymenterDb(backupId, target = null) {
     label = `${pm.name} (${pm.host})`;
   }
 
-  setJob({ active: true, name: 'Restauración de BD Paymenter', message: `Restaurando BD de Paymenter en ${label}...`, current: 0, total: 1, cancelRequested: false });
+  setJob({ active: true, name: 'Paymenter DB restore', message: `Restoring Paymenter database on ${label}...`, current: 0, total: 1, cancelRequested: false });
   try {
     await withConn(cfg, async (conn) => {
       const dir = `/tmp/pb_pmrestore_${Date.now()}`;
@@ -516,14 +516,14 @@ async function restorePaymenterDb(backupId, target = null) {
       await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
       await exec(
         conn,
-        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "El zip no contiene un .sql" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
       );
       await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
     });
     setJob({ current: 1 });
-    logger.info(`Base de datos de Paymenter restaurada en ${label}. El .zip también incluye el archivo .env de Paymenter por si necesitas restaurarlo a mano (por ejemplo a /var/www/paymenter/.env). Recuerda limpiar cachés de Paymenter si algo no cuadra: php artisan optimize:clear.`);
+    logger.info(`Paymenter database restored on ${label}. The .zip also includes Paymenter's .env file in case you need to restore it manually (for example to /var/www/paymenter/.env). Remember to clear Paymenter's caches if something looks off: php artisan optimize:clear.`);
   } finally {
-    setJob({ active: false, message: 'Finalizado', current: 0, total: 0, name: null, cancelRequested: false });
+    setJob({ active: false, message: 'Finished', current: 0, total: 0, name: null, cancelRequested: false });
   }
 }
 
@@ -532,7 +532,7 @@ async function restorePaymenterDb(backupId, target = null) {
 // ---------------------------------------------------------------------------
 function deleteBackup(id) {
   const b = db.prepare('SELECT * FROM backups WHERE id = ?').get(id);
-  if (!b) throw new Error('La copia no existe.');
+  if (!b) throw new Error('That backup does not exist.');
   try { fs.unlinkSync(backupFilePath(b)); } catch (e) { /* el archivo ya no estaba */ }
   db.prepare('DELETE FROM backups WHERE id = ?').run(id);
   // Si era la última copia de su fecha, la fecha vacía se elimina también
@@ -540,19 +540,19 @@ function deleteBackup(id) {
     const left = db.prepare('SELECT COUNT(*) AS c FROM backups WHERE snapshot_id = ?').get(b.snapshot_id).c;
     if (left === 0) db.prepare('DELETE FROM snapshots WHERE id = ?').run(b.snapshot_id);
   }
-  logger.info(`Copia eliminada: ${b.filename}`);
+  logger.info(`Backup deleted: ${b.filename}`);
 }
 
 function deleteSnapshot(id) {
   const snap = db.prepare('SELECT * FROM snapshots WHERE id = ?').get(id);
-  if (!snap) throw new Error('La fecha de copia no existe.');
+  if (!snap) throw new Error('That backup date does not exist.');
   const rows = db.prepare('SELECT * FROM backups WHERE snapshot_id = ?').all(id);
   for (const b of rows) {
     try { fs.unlinkSync(backupFilePath(b)); } catch (e) { /* ignorar */ }
   }
   db.prepare('DELETE FROM backups WHERE snapshot_id = ?').run(id);
   db.prepare('DELETE FROM snapshots WHERE id = ?').run(id);
-  logger.info(`Fecha de copia ${snap.created_at} eliminada (${rows.length} archivos).`);
+  logger.info(`Backup date ${snap.created_at} deleted (${rows.length} files).`);
 }
 
 // Limpieza automática de copias antiguas según la retención configurada
@@ -568,7 +568,7 @@ function cleanupOld() {
   if (!job.active) {
     db.prepare('DELETE FROM snapshots WHERE id NOT IN (SELECT snapshot_id FROM backups WHERE snapshot_id IS NOT NULL)').run();
   }
-  if (rows.length) logger.info(`Limpieza automática: ${rows.length} copias antiguas eliminadas (más de ${hours} horas).`);
+  if (rows.length) logger.info(`Automatic cleanup: ${rows.length} old backups deleted (older than ${hours} hours).`);
 }
 
 module.exports = {

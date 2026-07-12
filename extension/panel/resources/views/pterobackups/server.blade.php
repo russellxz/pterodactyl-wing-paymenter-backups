@@ -167,11 +167,14 @@
         }
 
         function renderJob(j) {
-            // Contador de proxima copia
+            // Contador de proxima copia. Al usuario le mostramos el de los NODOS
+            // (los archivos de su servidor), no el genérico ni el de la base de
+            // datos, que no le sirve de nada.
             var nextCard = document.getElementById('pb-next');
-            if (j && j.next_run) {
+            var nextNodes = j ? (j.next_run_nodes || null) : null;
+            if (nextNodes) {
                 var now = (j.server_now || Date.now());
-                document.getElementById('pb-next-value').textContent = fmtCountdown(j.next_run - now);
+                document.getElementById('pb-next-value').textContent = fmtCountdown(nextNodes - now);
                 nextCard.hidden = false;
             } else {
                 nextCard.hidden = true;

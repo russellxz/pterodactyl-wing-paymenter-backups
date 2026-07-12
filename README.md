@@ -80,7 +80,7 @@ sudo apt install -y nodejs
 node -v
 ```
 
-**Had you already installed Node 18?** Run the first two commands anyway (they replace it with 22) and, if you had already run `npm install` in the project, rebuild the dependencies with: `cd /opt/pterodactyl-backup && sudo npm rebuild`
+**Had you already installed Node 18?** Run the first two commands anyway (they replace it with 22) and, if you had already run `npm install` in the project, rebuild the dependencies with: `cd /opt/pterodactyl-wing-paymenter-backups && sudo npm rebuild`
 
 ### Step 2 — Download the project
 
@@ -89,10 +89,10 @@ node -v
 cd /opt
 
 # Download the project from GitHub
-sudo git clone https://github.com/russellxz/pterodactyl-backup.git
+sudo git clone https://github.com/russellxz/pterodactyl-wing-paymenter-backups.git
 
 # Go into the project folder
-cd pterodactyl-backup
+cd pterodactyl-wing-paymenter-backups
 
 # Install the project dependencies (takes 1-3 minutes)
 sudo npm install
@@ -131,7 +131,7 @@ It will ask for first name, last name, email and password (minimum 8 characters)
 
 ### Step 5 — Keep the system always on (systemd)
 
-This makes the page start on its own when the VPS boots and restart if it fails. The service already comes configured for the default installation (`/opt/pterodactyl-backup`), nothing needs editing.
+This makes the page start on its own when the VPS boots and restart if it fails. The service already comes configured for the default installation (`/opt/pterodactyl-wing-paymenter-backups`), nothing needs editing.
 
 ```bash
 # Copy the service file into the system
@@ -260,7 +260,7 @@ When the repository has improvements, update your VPS like this:
 
 ```bash
 # Go into the project folder
-cd /opt/pterodactyl-backup
+cd /opt/pterodactyl-wing-paymenter-backups
 
 # Download the changes from GitHub
 sudo git pull
@@ -295,10 +295,10 @@ Connect over SSH to the VPS where the Pterodactyl panel is installed (not the ba
 cd /opt
 
 # Download the project (if you already have the folder from before, skip this command)
-sudo git clone https://github.com/russellxz/pterodactyl-backup.git
+sudo git clone https://github.com/russellxz/pterodactyl-wing-paymenter-backups.git
 
 # Go into the extension folder
-cd pterodactyl-backup/extension
+cd pterodactyl-wing-paymenter-backups/extension
 
 # Install the extension into the panel
 sudo bash install.sh
@@ -320,7 +320,7 @@ Reload the panel with Ctrl + F5, enter any server and you'll see "Backup 2.0" in
 
 ```bash
 # On the panel VPS: download the changes and reinstall
-cd /opt/pterodactyl-backup
+cd /opt/pterodactyl-wing-paymenter-backups
 sudo git pull
 cd extension
 sudo bash install.sh
@@ -330,10 +330,10 @@ sudo bash install.sh
 
 ```bash
 # Remove the extension from the panel (the saved connection is kept)
-cd /opt/pterodactyl-backup/extension && sudo bash uninstall.sh
+cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash uninstall.sh
 
 # If something doesn't show up: prints a full diagnostic report
-cd /opt/pterodactyl-backup/extension && sudo bash check.sh
+cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash check.sh
 ```
 
 More details and troubleshooting for the extension in `extension/README.md`.

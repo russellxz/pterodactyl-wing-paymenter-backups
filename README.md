@@ -1,364 +1,366 @@
 # PteroBackups
 
-Sistema web de copias de seguridad **remotas** para [Pterodactyl](https://pterodactyl.io/). Se instala en un VPS aparte y, conectándose por SSH, hace copias de:
+Web-based remote backup system for Pterodactyl. It installs on a separate VPS and, connecting over SSH, makes backups of:
 
-- La **base de datos completa del panel** (mysqldump) + el archivo **`.env`** (imprescindible para reinstalaciones).
-- Los **archivos de cada servidor de cada nodo (Wings)**, un `.zip` por servidor, nombrado con el **nombre, apellido y correo del dueño** y el **nombre del servidor**, para encontrarlos al instante con el buscador.
+• The panel's complete database (mysqldump) + the `.env` file (essential for reinstalls).
+• The files of every server on every node (Wings), one `.zip` per server, named with the owner's first name, last name and email plus the server name, so you can find them instantly with the search box.
+• The complete Paymenter database (billing panel). This backup can be restored to a remote VPS or to the same one, exactly like the panel database.
 
-Todo se maneja desde una página web con diseño oscuro, iconos profesionales, progreso en tiempo real y registro de errores.
+Everything is managed from a web page with a dark design, professional icons, real-time progress and error logging.
 
-## Características
+## Features
 
-- Copias **manuales** (botón "Hacer copia ahora") y **automáticas** (cada 1 hora, 1, 7, 15 o 30 días).
-- **Buscador en tiempo real** por nombre, correo o servidor.
-- **Descargar** cualquier copia desde la web.
-- **Restaurar** un servidor concreto, **todos a la vez**, o la **BD del panel** (al mismo VPS o a uno nuevo).
-- **Borrado automático** de copias antiguas (retención configurable).
-- **Administradores con permisos** personalizables.
-- **Progreso en tiempo real** y página de **logs** en vivo.
-- Contraseñas SSH y de BD guardadas **cifradas** (AES-256) en una base de datos local SQLite (no hay que instalar ninguna base de datos: se crea sola en un archivo).
+• Manual backups ("Back up now" button) and automatic backups (every 1 hour, 1, 7, 15 or 30 days).
+• Real-time search by name, email or server.
+• Download any backup from the web.
+• Restore a specific server, all of them at once, or the panel DB (to the same VPS or a new one).
+• Restore the Paymenter DB to the same VPS or to a new one, just like the panel database.
+• Automatic deletion of old backups (configurable retention).
+• Administrators with customizable permissions.
+• Real-time progress and a live logs page.
+• SSH and DB passwords stored encrypted (AES-256) in a local SQLite database (no database to install: it creates itself in a file).
 
-> La **extensión para el panel de Pterodactyl** está incluida en la carpeta [`extension/`](extension/): los admins gestionan todas las copias desde el área admin del panel y cada usuario ve, descarga y restaura las copias de SU servidor desde una nueva opción "Backup 2.0" en su menú. **Compatible con el tema Arix v2** (no recompila el panel). Instrucciones completas en [`extension/README.md`](extension/README.md).
+The extension for the Pterodactyl panel is included in the `extension/` folder: admins manage all backups from the panel's admin area, and each user views, downloads and restores the backups of THEIR server from a new "Backup 2.0" option in their menu. Compatible with the Arix v2 theme (it does not recompile the panel). Full instructions in `extension/README.md`.
 
----
+───
 
-## Antes de empezar: 2 cosas básicas
+## Before you start: 2 basics
 
-**¿Qué es `sudo`?** Significa "ejecutar como administrador". Si ya estás conectado como `root`, los comandos funcionan igual con o sin `sudo`.
+**What is `sudo`?** It means "run as administrator". If you're already logged in as root, the commands work the same with or without `sudo`.
 
-**¿Qué es `nano`?** Es el editor de texto de la terminal. Lo usarás varias veces. Así se maneja:
+**What is `nano`?** It's the terminal's text editor. You'll use it several times. Here's how it works:
 
-| Acción | Tecla |
-|---|---|
-| Moverte por el texto | Flechas del teclado |
-| Pegar texto copiado | Clic derecho (o `Ctrl + Shift + V`) |
-| **Guardar** | `Ctrl + O` y luego `Enter` |
-| **Salir** | `Ctrl + X` |
+| Action | Key |
+| --- | --- |
+| Move through the text | Keyboard arrows |
+| Paste copied text | Right click (or Ctrl + Shift + V) |
+| Save | Ctrl + O then Enter |
+| Exit | Ctrl + X |
 
----
+───
 
-## Requisitos
+## Requirements
 
-| Dónde | Qué hace falta |
-|---|---|
-| **VPS del sistema** (donde instalas esta página) | Ubuntu 22.04 o 24.04 limpio y un dominio agregado a Cloudflare |
-| **VPS del panel** Pterodactyl | Acceso SSH con contraseña + `zip` y `unzip` |
-| **Cada nodo (Wings)** | Acceso SSH con contraseña + `zip` y `unzip` |
+| Where | What you need |
+| --- | --- |
+| System VPS (where you install this page) | Clean Ubuntu 22.04 or 24.04 and a domain added to Cloudflare |
+| Pterodactyl panel VPS | SSH access with password + `zip` and `unzip` |
+| Each node (Wings) | SSH access with password + `zip` and `unzip` |
 
-En el **VPS del panel** y en **cada nodo** ejecuta esto (instala las herramientas para comprimir y descomprimir las copias):
+On the panel VPS and on each node, run this (it installs the tools to compress and decompress the backups):
 
 ```bash
 sudo apt update && sudo apt install -y zip unzip
 ```
 
-> **Importante:** el usuario SSH que uses (normalmente `root`) debe poder entrar **con contraseña**. Si tu VPS solo acepta llaves, abre la configuración con `sudo nano /etc/ssh/sshd_config`, busca y deja así estas líneas: `PasswordAuthentication yes` y `PermitRootLogin yes`. Guarda, sal y reinicia SSH con `sudo systemctl restart ssh`.
+**Important:** the SSH user you use (usually root) must be able to log in with a password. If your VPS only accepts keys, open the configuration with `sudo nano /etc/ssh/sshd_config`, find and set these lines: `PasswordAuthentication yes` and `PermitRootLogin yes`. Save, exit and restart SSH with `sudo systemctl restart ssh`.
 
----
+───
 
-## Instalación paso a paso (VPS del sistema)
+## Step-by-step installation (system VPS)
 
-### Paso 1 — Instalar Node.js 22, Git y Nginx
+### Step 1 — Install Node.js 22, Git and Nginx
 
 ```bash
-# Actualiza la lista de programas disponibles
+# Update the list of available programs
 sudo apt update
 
-# Instala: curl (descargar cosas), git (clonar el proyecto),
-# build-essential y python3 (necesarios para compilar la base de datos),
-# y nginx (el servidor web que mostrará la página)
+# Install: curl (download things), git (clone the project),
+# build-essential and python3 (needed to compile the database),
+# and nginx (the web server that will show the page)
 sudo apt install -y curl git build-essential python3 nginx
 
-# Agrega el repositorio oficial de Node.js 22 (versión LTS con soporte hasta 2027)
+# Add the official Node.js 22 repository (LTS version supported until 2027)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 
-# Instala Node.js
+# Install Node.js
 sudo apt install -y nodejs
 
-# Comprueba que se instaló bien: debe mostrar v22.x
+# Check that it installed correctly: it should show v22.x
 node -v
 ```
 
-> **¿Ya habías instalado Node 18?** Ejecuta igualmente los dos primeros comandos (lo reemplazan por el 22) y, si ya habías hecho `npm install` en el proyecto, recompila las dependencias con: `cd /opt/pterodactyl-backup && sudo npm rebuild`
+**Had you already installed Node 18?** Run the first two commands anyway (they replace it with 22) and, if you had already run `npm install` in the project, rebuild the dependencies with: `cd /opt/pterodactyl-backup && sudo npm rebuild`
 
-### Paso 2 — Descargar el proyecto
+### Step 2 — Download the project
 
 ```bash
-# Entra a la carpeta /opt (donde se suelen instalar programas)
+# Go into the /opt folder (where programs are usually installed)
 cd /opt
 
-# Descarga el proyecto desde GitHub
+# Download the project from GitHub
 sudo git clone https://github.com/russellxz/pterodactyl-backup.git
 
-# Entra a la carpeta del proyecto
+# Go into the project folder
 cd pterodactyl-backup
 
-# Instala las dependencias del proyecto (tarda 1-3 minutos)
+# Install the project dependencies (takes 1-3 minutes)
 sudo npm install
 ```
 
-### Paso 3 — Configurar el archivo .env (la clave secreta)
+### Step 3 — Configure the .env file (the secret key)
 
-El archivo `.env` guarda la configuración privada del sistema. Lo más importante es `APP_SECRET`: una clave que protege las sesiones de login y **cifra las contraseñas SSH** que guardes. Cada instalación debe tener la suya.
+The `.env` file stores the system's private configuration. The most important thing is `APP_SECRET`: a key that protects login sessions and encrypts the SSH passwords you save. Each installation must have its own.
 
 ```bash
-# Crea tu configuración a partir de la plantilla de ejemplo
+# Create your configuration from the example template
 sudo cp .env.example .env
 
-# Genera una clave aleatoria segura. COPIA el resultado que aparece
+# Generate a secure random key. COPY the result that appears
 openssl rand -hex 32
 
-# Abre la configuración para editarla
+# Open the configuration to edit it
 sudo nano .env
 ```
 
-Dentro de nano, busca la línea que empieza con `APP_SECRET=` y borra lo que hay después del `=` y pega tu clave. Debe quedar algo así:
+Inside nano, find the line that starts with `APP_SECRET=` and delete whatever is after the `=`, then paste your key. It should look something like this:
 
 ```
-APP_SECRET=f3a91c0d8b27e6...tu_clave_larga...
+APP_SECRET=f3a91c0d8b27e6...your_long_key...
 ```
 
-Guarda con `Ctrl + O`, `Enter`, y sal con `Ctrl + X`. El resto del archivo no hace falta tocarlo.
+Save with Ctrl + O, Enter, and exit with Ctrl + X. You don't need to touch the rest of the file.
 
-### Paso 4 — Crear tu cuenta de administrador
+### Step 4 — Create your administrator account
 
 ```bash
 sudo npm run create-admin
 ```
 
-Te preguntará nombre, apellido, correo y contraseña (mínimo 8 caracteres). Con esa cuenta entrarás a la página. Los admins creados por consola son **raíz**: tienen todos los permisos. Si algún día olvidas la contraseña, vuelve a ejecutar este mismo comando con el mismo correo y quedará restablecida.
+It will ask for first name, last name, email and password (minimum 8 characters). You'll log into the page with that account. Admins created from the console are root: they have every permission. If you ever forget the password, run this same command again with the same email and it will be reset.
 
-### Paso 5 — Dejar el sistema encendido siempre (systemd)
+### Step 5 — Keep the system always on (systemd)
 
-Esto hace que la página arranque sola al encender el VPS y se reinicie si falla. El servicio ya viene configurado para la instalación por defecto (`/opt/pterodactyl-backup`), no hay que editar nada.
+This makes the page start on its own when the VPS boots and restart if it fails. The service already comes configured for the default installation (`/opt/pterodactyl-backup`), nothing needs editing.
 
 ```bash
-# Copia el archivo del servicio al sistema
+# Copy the service file into the system
 sudo cp deploy/pterobackups.service /etc/systemd/system/pterobackups.service
 ```
 
-> Solo si clonaste el proyecto en OTRA carpeta distinta: ábrelo con `sudo nano /etc/systemd/system/pterobackups.service` y cambia la línea `WorkingDirectory=` por tu ruta real.
+**Only if you cloned the project into ANOTHER folder:** open it with `sudo nano /etc/systemd/system/pterobackups.service` and change the `WorkingDirectory=` line to your real path.
 
-Ahora activa el servicio:
+Now enable the service:
 
 ```bash
-# Recarga systemd para que detecte el servicio nuevo
+# Reload systemd so it detects the new service
 sudo systemctl daemon-reload
 
-# Activa el arranque automático y enciende el sistema ahora
+# Enable automatic startup and turn the system on now
 sudo systemctl enable --now pterobackups
 
-# Comprueba que está corriendo: debe decir "active (running)" en verde
+# Check that it's running: it should say "active (running)" in green
 sudo systemctl status pterobackups
 ```
 
-La app queda escuchando solo internamente en `127.0.0.1:3500`. Nadie puede entrar todavía desde fuera: para eso es Nginx (siguiente paso).
+The app listens only internally on `127.0.0.1:3500`. No one can get in from outside yet: that's what Nginx is for (next step).
 
----
+───
 
-## Paso 6 — Dominio en Cloudflare
+### Step 6 — Domain in Cloudflare
 
-Necesitas un subdominio para tu página, por ejemplo `copias.tudominio.com`.
+You need a subdomain for your page, for example `copias.yourdomain.com`.
 
-1. Entra a [Cloudflare](https://dash.cloudflare.com) y elige tu dominio.
-2. Ve a **DNS → Records → Add record** y crea:
-   - **Type:** `A`
-   - **Name:** `copias` (o el nombre que quieras)
-   - **IPv4 address:** la IP de este VPS (el del sistema de copias)
-   - **Proxy status:** activado (nube naranja)
-3. Ve a **SSL/TLS → Overview** y pon el modo en **Full (strict)**.
-4. Ve a **SSL/TLS → Origin Server → Create Certificate**:
-   - Deja las opciones por defecto y pulsa **Create**.
-   - Te mostrará dos cuadros de texto: el **Origin Certificate** (certificado) y la **Private Key** (clave privada). **Deja esa pestaña abierta**, los vas a copiar en el siguiente paso.
+1. Go to Cloudflare and choose your domain.
+2. Go to DNS → Records → Add record and create:
+   - Type: **A**
+   - Name: **copias** (or whatever name you want)
+   - IPv4 address: the IP of this VPS (the backup system's one)
+   - Proxy status: enabled (orange cloud)
+3. Go to SSL/TLS → Overview and set the mode to **Full (strict)**.
+4. Go to SSL/TLS → Origin Server → Create Certificate:
+   - Leave the default options and press Create.
+   - It will show you two text boxes: the **Origin Certificate** and the **Private Key**. Leave that tab open, you'll copy them in the next step.
 
-## Paso 7 — Configurar Nginx con el certificado
+### Step 7 — Configure Nginx with the certificate
 
-Nginx es la "puerta de entrada": recibe las visitas a `https://copias.tudominio.com` con el certificado de Cloudflare y las pasa internamente a la app.
+Nginx is the "front door": it receives visits to `https://copias.yourdomain.com` with the Cloudflare certificate and passes them internally to the app.
 
-**7.1 — Guardar el certificado de Cloudflare en el VPS:**
+**7.1 — Save the Cloudflare certificate on the VPS:**
 
 ```bash
-# Crea la carpeta donde vivirán el certificado y la clave
+# Create the folder where the certificate and key will live
 sudo mkdir -p /etc/ssl/cloudflare
 
-# Abre un archivo vacío para el CERTIFICADO
+# Open an empty file for the CERTIFICATE
 sudo nano /etc/ssl/cloudflare/cert.pem
 ```
 
-Pega el **Origin Certificate** completo de Cloudflare (desde `-----BEGIN CERTIFICATE-----` hasta `-----END CERTIFICATE-----`). Guarda y sal.
+Paste the complete **Origin Certificate** from Cloudflare (from `-----BEGIN CERTIFICATE-----` to `-----END CERTIFICATE-----`). Save and exit.
 
 ```bash
-# Abre un archivo vacío para la CLAVE PRIVADA
+# Open an empty file for the PRIVATE KEY
 sudo nano /etc/ssl/cloudflare/key.pem
 ```
 
-Pega la **Private Key** completa (desde `-----BEGIN PRIVATE KEY-----` hasta `-----END PRIVATE KEY-----`). Guarda y sal.
+Paste the complete **Private Key** (from `-----BEGIN PRIVATE KEY-----` to `-----END PRIVATE KEY-----`). Save and exit.
 
 ```bash
-# Protege la clave privada para que solo root pueda leerla
+# Protect the private key so only root can read it
 sudo chmod 600 /etc/ssl/cloudflare/key.pem
 ```
 
-**7.2 — Poner TU dominio en la configuración de Nginx:**
+**7.2 — Put YOUR domain in the Nginx configuration:**
 
 ```bash
-# Copia la configuración incluida en el proyecto
+# Copy the configuration included in the project
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/pterobackups.conf
 
-# Ábrela para poner tu dominio
+# Open it to set your domain
 sudo nano /etc/nginx/sites-available/pterobackups.conf
 ```
 
-Dentro verás **dos** líneas que dicen:
+Inside you'll see two lines that say:
 
 ```
-server_name copias.tudominio.com;
+server_name copias.yourdomain.com;
 ```
 
-Cambia `copias.tudominio.com` por tu subdominio real **en las dos líneas** (una está en el bloque del puerto 80 y otra en el del 443). No toques nada más. Guarda y sal.
+Change `copias.yourdomain.com` to your real subdomain on both lines (one is in the port 80 block and the other in the 443 block). Don't touch anything else. Save and exit.
 
-**7.3 — Activar el sitio:**
+**7.3 — Enable the site:**
 
 ```bash
-# Activa la configuración (crea un "acceso directo" en sites-enabled)
+# Enable the configuration (creates a "shortcut" in sites-enabled)
 sudo ln -s /etc/nginx/sites-available/pterobackups.conf /etc/nginx/sites-enabled/
 
-# Comprueba que no hay errores de escritura: debe decir "syntax is ok" y "test is successful"
+# Check there are no syntax errors: it should say "syntax is ok" and "test is successful"
 sudo nginx -t
 
-# Aplica los cambios
+# Apply the changes
 sudo systemctl reload nginx
 ```
 
-**7.4 — (Solo si usas firewall UFW) abrir los puertos web:**
+**7.4 — (Only if you use the UFW firewall) open the web ports:**
 
 ```bash
 sudo ufw allow 'Nginx Full'
 ```
 
-**Listo.** Abre `https://copias.tudominio.com` en tu navegador e inicia sesión con la cuenta del Paso 4.
+Done. Open `https://copias.yourdomain.com` in your browser and log in with the account from Step 4.
 
----
+───
 
-## Guía de uso de la página
+## Using the page
 
-1. **Nodos y Paneles → Agregar panel.** Escribe un nombre, la IP del VPS del panel, su contraseña SSH y los datos de la base de datos. Esos datos están en el archivo `/var/www/pterodactyl/.env` **del panel**: `DB_USERNAME` (usuario), `DB_PASSWORD` (contraseña) y `DB_DATABASE` (nombre, normalmente `panel`). Puedes verlos con `cat /var/www/pterodactyl/.env` en el VPS del panel. Pulsa **Probar conexión**. Puedes agregar **varios paneles**.
-2. **Nodos y Paneles → Agregar nodo.** Por cada nodo (Wings): un nombre, su IP, su contraseña SSH y **a qué panel pertenece**. Con el lápiz puedes editar cualquier nodo o panel después (por ejemplo, para cambiar la contraseña SSH).
-3. **Configuración.** Elige cada cuánto se hacen las copias automáticas, qué se copia y cuándo se borran las copias antiguas. Con las copias automáticas activas, verás arriba un **contador en tiempo real** con lo que falta para la siguiente.
-4. **Copias.** Cada pasada crea una **fecha de copia** dentro de cada nodo: entra al nodo → elige la fecha → ahí están todos los servidores con su dueño y correo, con buscador, para **descargar**, **restaurar** uno o **restaurar toda la fecha** (solo archivos de servidores: la BD del panel nunca se toca). Las copias de la **BD de los paneles** están en su propia sección con su propio botón de restaurar (al mismo panel o a otro VPS). Mientras una copia corre puedes **cancelarla**, y el progreso sigue visible aunque recargues la página. Los .zip excluyen `node_modules` y `package-lock.json`.
-5. **Administradores.** Crea más admins marcando solo los permisos que quieras darles.
-6. **Logs.** Toda la actividad y los errores, en tiempo real.
+1. **Nodes and Panels → Add panel.** Type a name, the panel VPS's IP, its SSH password and the database details. Those details are in the panel's `/var/www/pterodactyl/.env` file: `DB_USERNAME` (user), `DB_PASSWORD` (password) and `DB_DATABASE` (name, usually `panel`). You can view them with `cat /var/www/pterodactyl/.env` on the panel VPS. Press Test connection. You can add several panels.
+2. **Nodes and Panels → Add node.** For each node (Wings): a name, its IP, its SSH password and which panel it belongs to. With the pencil you can edit any node or panel afterwards (for example, to change the SSH password).
+3. **Settings.** Choose how often automatic backups run, what gets backed up and when old backups are deleted. With automatic backups active, you'll see a real-time countdown at the top showing the time until the next one.
+4. **Backups.** Each pass creates a backup date inside each node: enter the node → choose the date → there you'll find every server with its owner and email, with a search box, to download, restore one, or restore the whole date (server files only: the panel DB is never touched). The panel DB backups are in their own section with their own restore button (to the same panel or to another VPS). The Paymenter DB backups have their own restore button too, and can be restored to the same VPS or to a new one, exactly like the panel. While a backup is running you can cancel it, and the progress stays visible even if you reload the page. The `.zip` files exclude `node_modules` and `package-lock.json`.
+5. **Administrators.** Create more admins, ticking only the permissions you want to give them.
+6. **Logs.** All activity and errors, in real time.
 
-Las copias se guardan en `storage/backups/` dentro del proyecto (servidores en `servers/`, BD en `panel/` y las copias del `.env` en `panel/env/`).
+Backups are saved in `storage/backups/` inside the project (servers in `servers/`, DB in `panel/`, and the `.env` backups in `panel/env/`).
 
----
+───
 
-## Actualizar el sistema cuando haya cambios nuevos
+## Updating the system when there are new changes
 
-Cuando el repositorio tenga mejoras, actualiza tu VPS así:
+When the repository has improvements, update your VPS like this:
 
 ```bash
-# Entra a la carpeta del proyecto
+# Go into the project folder
 cd /opt/pterodactyl-backup
 
-# Descarga los cambios desde GitHub
+# Download the changes from GitHub
 sudo git pull
 
-# Instala dependencias nuevas (si las hay)
+# Install new dependencies (if any)
 sudo npm install
 
-# Reinicia el sistema para aplicar los cambios
+# Restart the system to apply the changes
 sudo systemctl restart pterobackups
 ```
 
----
+───
 
-## Extensión para el panel de Pterodactyl (Backup 2.0)
+## Extension for the Pterodactyl panel (Backup 2.0)
 
-La extensión conecta tu panel de Pterodactyl con esta página de copias:
+The extension connects your Pterodactyl panel with this backup page:
 
-- **Admins del panel:** nueva sección **PteroBackups** en el área admin con todo lo de la página: hacer copias al momento, cancelar, progreso en vivo, contador de la próxima copia automática, fechas de copia por nodo, buscador de servidores por nombre o correo, descargar, restaurar, eliminar y cambiar la programación.
-- **Usuarios:** opción **"Backup 2.0"** en el menú lateral de su servidor para ver, **descargar** y **restaurar** SOLO las copias de su servidor.
-- **Compatible con el tema Arix v2** y con cualquier otro tema: la extensión **no recompila el panel** (que es lo que rompe los temas), y el botón del menú copia el diseño del tema activo.
+• **Panel admins:** a new PteroBackups section in the admin area with everything the page has: make backups on the spot, cancel, live progress, countdown to the next automatic backup, backup dates per node, server search by name or email, download, restore, delete and change the schedule.
+• **Users:** a "Backup 2.0" option in their server's sidebar menu to view, download and restore ONLY their server's backups.
+• Compatible with the Arix v2 theme and any other theme: the extension does not recompile the panel (which is what breaks themes), and the menu button copies the design of the active theme.
 
-### Paso 1 — Copiar los datos de conexión
+### Step 1 — Copy the connection details
 
-En **esta página de copias**, entra a **Configuración** y busca la tarjeta **"Extensión del panel"**. Ahí están los dos datos que necesitarás: la **URL del sistema** y la **clave de API**. Tenlos a mano (tócalos para seleccionarlos y copiarlos).
+On this backup page, go to Settings and look for the "Panel extension" card. There you'll find the two details you'll need: the system URL and the API key. Keep them handy (tap them to select and copy them).
 
-### Paso 2 — Instalar la extensión en el VPS del panel
+### Step 2 — Install the extension on the panel VPS
 
-Conéctate por SSH **al VPS donde está instalado el panel** de Pterodactyl (no al del sistema de copias, salvo que tengas ambos en el mismo VPS) y ejecuta:
+Connect over SSH to the VPS where the Pterodactyl panel is installed (not the backup system's one, unless you have both on the same VPS) and run:
 
 ```bash
-# Entra a la carpeta /opt
+# Go into the /opt folder
 cd /opt
 
-# Descarga el proyecto (si ya tienes la carpeta de antes, sáltate este comando)
+# Download the project (if you already have the folder from before, skip this command)
 sudo git clone https://github.com/russellxz/pterodactyl-backup.git
 
-# Entra a la carpeta de la extensión
+# Go into the extension folder
 cd pterodactyl-backup/extension
 
-# Instala la extensión en el panel
+# Install the extension into the panel
 sudo bash install.sh
 ```
 
-El instalador copia las piezas al panel, agrega las rutas y limpia las cachés. Al final imprime varias líneas que empiezan con `OK:` y el mensaje "Extensión PteroBackups instalada correctamente".
+The installer copies the pieces into the panel, adds the routes and clears the caches. At the end it prints several lines starting with `OK:` and the message "PteroBackups extension installed successfully".
 
-> Si tu panel **no** está en la carpeta normal (`/var/www/pterodactyl`), indícale la ruta: `sudo bash install.sh /ruta/de/tu/panel`
+If your panel is not in the normal folder (`/var/www/pterodactyl`), tell it the path: `sudo bash install.sh /path/to/your/panel`
 
-### Paso 3 — Conectar el panel con el sistema de copias
+### Step 3 — Connect the panel with the backup system
 
-1. Abre `https://TU-PANEL/admin/pterobackups` (también aparece **PteroBackups** en el menú del área admin).
-2. Pega la **URL** y la **clave de API** del Paso 1.
-3. Pulsa **Guardar y probar conexión**. Debe decir **"Conexión correcta"**.
+1. Open `https://YOUR-PANEL/admin/pterobackups` (PteroBackups also appears in the admin area menu).
+2. Paste the URL and API key from Step 1.
+3. Press Save and test connection. It should say "Connection successful".
 
-Recarga el panel con `Ctrl + F5`, entra a cualquier servidor y verás **"Backup 2.0"** en el menú lateral de tu servidor. La conexión queda guardada en la base de datos del panel: si algún día reinstalas el panel con la misma BD, solo vuelve a ejecutar `install.sh` y reconecta sola.
+Reload the panel with Ctrl + F5, enter any server and you'll see "Backup 2.0" in your server's sidebar menu. The connection is saved in the panel's database: if you ever reinstall the panel with the same DB, just run `install.sh` again and it reconnects on its own.
 
-### Actualizar la extensión cuando haya cambios
+### Updating the extension when there are changes
 
 ```bash
-# En el VPS del panel: descarga los cambios y reinstala
+# On the panel VPS: download the changes and reinstall
 cd /opt/pterodactyl-backup
 sudo git pull
 cd extension
 sudo bash install.sh
 ```
 
-### Desinstalar o diagnosticar
+### Uninstalling or diagnosing
 
 ```bash
-# Quitar la extensión del panel (la conexión guardada se conserva)
+# Remove the extension from the panel (the saved connection is kept)
 cd /opt/pterodactyl-backup/extension && sudo bash uninstall.sh
 
-# Si algo no aparece: imprime un informe completo de diagnóstico
+# If something doesn't show up: prints a full diagnostic report
 cd /opt/pterodactyl-backup/extension && sudo bash check.sh
 ```
 
-Más detalles y solución de problemas de la extensión en [`extension/README.md`](extension/README.md).
+More details and troubleshooting for the extension in `extension/README.md`.
 
----
+───
 
-## Solución de problemas
+## Troubleshooting
 
-- **La página no carga:** revisa el sistema con `sudo systemctl status pterobackups` y mira los errores en vivo con `sudo journalctl -u pterobackups -f`. Revisa también Nginx con `sudo nginx -t`.
-- **Error 521/522 de Cloudflare:** Nginx está apagado o el firewall bloquea los puertos 80/443. Revisa `sudo systemctl status nginx` y el paso 7.4.
-- **`npm install` falla en better-sqlite3:** te faltó `build-essential` y `python3` (Paso 1).
-- **Probar conexión falla:** comprueba que puedes entrar a mano con `ssh root@IP_DEL_NODO` usando esa contraseña y que el puerto 22 no está bloqueado.
-- **Las copias salen con "Desconocido":** los datos de la BD del panel están mal; revísalos en "Nodos y Panel" y usa **Probar conexión**.
-- **Un servidor se omite por "vacío":** su volumen no tiene archivos todavía; es normal.
-- **Cambié APP_SECRET y nada conecta:** las contraseñas guardadas se cifran con esa clave; vuelve a escribir las contraseñas de los nodos y del panel en la web.
+• **The page won't load:** check the system with `sudo systemctl status pterobackups` and watch the live errors with `sudo journalctl -u pterobackups -f`. Also check Nginx with `sudo nginx -t`.
+• **Cloudflare 521/522 error:** Nginx is off or the firewall is blocking ports 80/443. Check `sudo systemctl status nginx` and step 7.4.
+• **`npm install` fails on better-sqlite3:** you're missing `build-essential` and `python3` (Step 1).
+• **Test connection fails:** check that you can log in manually with `ssh root@NODE_IP` using that password and that port 22 isn't blocked.
+• **Backups come out as "Unknown":** the panel DB details are wrong; check them in "Nodes and Panel" and use Test connection.
+• **A server is skipped as "empty":** its volume has no files yet; that's normal.
+• **I changed APP_SECRET and nothing connects:** the saved passwords are encrypted with that key; re-enter the node and panel passwords on the web.
 
-## Notas de seguridad
+## Security notes
 
-- Usa contraseñas SSH **fuertes** y, si puedes, limita el SSH de los nodos por firewall a la IP de este VPS.
-- No abras el puerto 3500 al exterior: la app solo escucha en `127.0.0.1` y se sirve por Nginx con HTTPS.
-- Este VPS guarda credenciales (cifradas) de tus otros VPS: protégelo igual de bien que al panel.
+• Use strong SSH passwords and, if you can, limit the nodes' SSH by firewall to this VPS's IP.
+• Don't open port 3500 to the outside: the app only listens on `127.0.0.1` and is served through Nginx over HTTPS.
+• This VPS stores (encrypted) credentials of your other VPSs: protect it just as well as the panel.
 
-## Hoja de ruta
+## Roadmap
 
-- [x] Fase 1: página web del sistema de copias.
-- [x] Fase 2: extensión para el panel de Pterodactyl (carpeta `extension/`): gestión completa desde el área admin, copias visibles/descargables/restaurables por cada usuario en su servidor, compatible con el tema Arix v2.
+- [x] Phase 1: web page for the backup system.
+- [x] Phase 2: extension for the Pterodactyl panel (`extension/` folder): full management from the admin area, backups viewable/downloadable/restorable by each user on their server, compatible with the Arix v2 theme.
 
-## Licencia
+## License
 
-MIT. Úsalo, modifícalo y compártelo libremente.
+MIT. Use it, modify it and share it freely.

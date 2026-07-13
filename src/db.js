@@ -164,4 +164,11 @@ function setSetting(key, value) {
   ).run(key, String(value));
 }
 
-module.exports = { db, getSetting, setSetting };
+// Borra la huella SSH guardada de un host:puerto. Se usa cuando el admin cambia
+// la IP de un nodo/panel/Paymenter (o reconstruye el VPS), para que la próxima
+// conexión vuelva a confiar en la clave nueva (trust-on-first-use).
+function clearHostKey(host, port) {
+  db.prepare('DELETE FROM settings WHERE key = ?').run(`hostkey_${host}_${Number(port) || 22}`);
+}
+
+module.exports = { db, getSetting, setSetting, clearHostKey };

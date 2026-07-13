@@ -3,7 +3,7 @@
 // cancelación de tareas y contador de la próxima copia automática.
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { db, getSetting, setSetting } = require('./db');
+const { db, getSetting, setSetting, clearHostKey } = require('./db');
 const { encrypt, decrypt } = require('./cipher');
 const { withConn, exec, sq } = require('./ssh');
 const backup = require('./backup');
@@ -194,6 +194,8 @@ router.post('/panels/:id/update', requirePerm('manage_nodes'), (req, res) => {
   if (!p) return go(res, '/nodes', null, 'That panel does not exist.');
   const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
   if (!name || !host) return go(res, '/nodes', null, 'Name and IP are required.');
+  // Si cambia la IP o el puerto, olvidamos la huella SSH vieja (nuevo host = nueva clave).
+  if (host.trim() !== p.host || (parseInt(ssh_port, 10) || 22) !== p.ssh_port) clearHostKey(p.host, p.ssh_port);
   db.prepare(`
     UPDATE panels SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?
     WHERE id=?
@@ -224,7 +226,7 @@ router.post('/panels/:id/test', requirePerm('manage_nodes'), wrap(async (req, re
   try {
     const out = await withConn(
       { host: p.host, port: p.ssh_port, user: p.ssh_user, password: decrypt(p.ssh_password) },
-      (conn) => exec(conn, `mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(decrypt(p.db_password))} ${sq(p.db_name)} -e ${sq('SELECT COUNT(*) FROM servers')}`)
+      (conn) => exec(conn, `MYSQL_PWD=${sq(decrypt(p.db_password))} mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} ${sq(p.db_name)} -e ${sq('SELECT COUNT(*) FROM servers')}`)
     );
     res.json({ ok: true, message: `Connected to "${p.name}". Servers in the panel: ${out.trim()}.` });
   } catch (e) {
@@ -257,6 +259,7 @@ router.post('/paymenters/:id/update', requirePerm('manage_nodes'), (req, res) =>
   if (!pm) return go(res, '/paymenter', null, 'That Paymenter does not exist.');
   const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
   if (!name || !host) return go(res, '/paymenter', null, 'Name and IP are required.');
+  if (host.trim() !== pm.host || (parseInt(ssh_port, 10) || 22) !== pm.ssh_port) clearHostKey(pm.host, pm.ssh_port);
   db.prepare(`
     UPDATE paymenters SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?
     WHERE id=?
@@ -286,7 +289,7 @@ router.post('/paymenters/:id/test', requirePerm('manage_nodes'), wrap(async (req
   try {
     const out = await withConn(
       { host: pm.host, port: pm.ssh_port, user: pm.ssh_user, password: decrypt(pm.ssh_password) },
-      (conn) => exec(conn, `mysql -N -B -h 127.0.0.1 -u ${sq(pm.db_user)} -p${sq(decrypt(pm.db_password))} ${sq(pm.db_name)} -e ${sq('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')}`)
+      (conn) => exec(conn, `MYSQL_PWD=${sq(decrypt(pm.db_password))} mysql -N -B -h 127.0.0.1 -u ${sq(pm.db_user)} ${sq(pm.db_name)} -e ${sq('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')}`)
     );
     res.json({ ok: true, message: `Connected to "${pm.name}". Tables in the database: ${out.trim()}.` });
   } catch (e) {
@@ -335,6 +338,7 @@ router.post('/nodes/:id/update', requirePerm('manage_nodes'), (req, res) => {
   if (!node) return go(res, '/nodes', null, 'That node does not exist.');
   const { name, host, ssh_port, ssh_user, ssh_password, panel_id } = req.body;
   if (!name || !host) return go(res, '/nodes', null, 'Name and IP are required.');
+  if (host.trim() !== node.host || (parseInt(ssh_port, 10) || 22) !== node.ssh_port) clearHostKey(node.host, node.ssh_port);
   db.prepare('UPDATE nodes SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, panel_id=? WHERE id=?')
     .run(
       name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),

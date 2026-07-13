@@ -124,7 +124,7 @@ async function getPanelMeta(p) {
   const query =
     "SELECT s.uuid, REPLACE(REPLACE(s.name,'\\t',' '),'\\n',' '), u.name_first, u.name_last, u.email " +
     'FROM servers s JOIN users u ON u.id = s.owner_id';
-  const cmd = `mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(decrypt(p.db_password))} ${sq(p.db_name)} -e ${sq(query)}`;
+  const cmd = `MYSQL_PWD=${sq(decrypt(p.db_password))} mysql -N -B -h 127.0.0.1 -u ${sq(p.db_user)} ${sq(p.db_name)} -e ${sq(query)}`;
   const out = await withConn(panelSsh(p), (conn) => exec(conn, cmd));
   const meta = {};
   out.split('\n').filter(Boolean).forEach((line) => {
@@ -214,7 +214,7 @@ async function backupPanelDb(p) {
   await withConn(panelSsh(p), async (conn) => {
     await exec(
       conn,
-      `mysqldump -h 127.0.0.1 -u ${sq(p.db_user)} -p${sq(dbPass)} --single-transaction --routines --triggers ${sq(p.db_name)} > ${sq(remoteSql)}`
+      `MYSQL_PWD=${sq(dbPass)} mysqldump -h 127.0.0.1 -u ${sq(p.db_user)} --single-transaction --routines --triggers ${sq(p.db_name)} > ${sq(remoteSql)}`
     );
     const hasEnv = (await exec(conn, `if cp ${sq(p.env_path)} ${sq(remoteEnv)} 2>/dev/null; then echo OK; else echo NO; fi`)).trim() === 'OK';
     await exec(conn, `cd /tmp && zip -jq ${sq(remoteZip)} ${sq(remoteSql)} ${hasEnv ? sq(remoteEnv) : ''}`);
@@ -252,7 +252,7 @@ async function backupPaymenterDb(pm) {
   await withConn(panelSsh(pm), async (conn) => {
     await exec(
       conn,
-      `mysqldump -h 127.0.0.1 -u ${sq(pm.db_user)} -p${sq(dbPass)} --single-transaction --routines --triggers ${sq(pm.db_name)} > ${sq(remoteSql)}`
+      `MYSQL_PWD=${sq(dbPass)} mysqldump -h 127.0.0.1 -u ${sq(pm.db_user)} --single-transaction --routines --triggers ${sq(pm.db_name)} > ${sq(remoteSql)}`
     );
     const hasEnv = (await exec(conn, `if cp ${sq(pm.env_path)} ${sq(remoteEnv)} 2>/dev/null; then echo OK; else echo NO; fi`)).trim() === 'OK';
     await exec(conn, `cd /tmp && zip -jq ${sq(remoteZip)} ${sq(remoteSql)} ${hasEnv ? sq(remoteEnv) : ''}`);
@@ -469,7 +469,7 @@ async function restorePanelDb(backupId, target = null) {
       await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
       await exec(
         conn,
-        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; MYSQL_PWD=${sq(dbPass)} mysql -h 127.0.0.1 -u ${sq(dbUser)} ${sq(dbName)} < "$f"`
       );
       await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
     });
@@ -516,7 +516,7 @@ async function restorePaymenterDb(backupId, target = null) {
       await exec(conn, `mkdir -p ${sq(dir)} && unzip -oq ${sq(remoteZip)} -d ${sq(dir)}`);
       await exec(
         conn,
-        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; mysql -h 127.0.0.1 -u ${sq(dbUser)} -p${sq(dbPass)} ${sq(dbName)} < "$f"`
+        `f=$(ls ${sq(dir)}/*.sql 2>/dev/null | head -n1); [ -n "$f" ] || { echo "The zip does not contain a .sql file" >&2; exit 1; }; MYSQL_PWD=${sq(dbPass)} mysql -h 127.0.0.1 -u ${sq(dbUser)} ${sq(dbName)} < "$f"`
       );
       await exec(conn, `rm -rf ${sq(dir)} ${sq(remoteZip)}`).catch(() => {});
     });

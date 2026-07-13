@@ -62,10 +62,10 @@
               <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
               <% } %>
               <% if (can('restore_backups')) { %>
-              <button class="btn btn-sm" type="button" title="Restore this server" onclick="restoreOne('/backups/<%= b.id %>/restore', 'Restore &quot;<%= b.server_name %>&quot; to its node? The backup files will overwrite the current ones.')"><i data-lucide="history"></i></button>
+              <button class="btn btn-sm" type="button" title="Restore this server" data-action="/backups/<%= b.id %>/restore" data-name="<%= b.server_name %>" onclick="restoreOne(this.dataset.action, 'Restore \'' + this.dataset.name + '\' to its node? The backup files will overwrite the current ones.')"><i data-lucide="history"></i></button>
               <% } %>
               <% if (can('delete_backups')) { %>
-              <button class="btn btn-sm btn-danger" type="button" title="Delete" onclick="deleteOne(this, '/backups/<%= b.id %>/delete', 'Delete the backup of &quot;<%= b.server_name %>&quot;? This cannot be undone.')"><i data-lucide="trash-2"></i></button>
+              <button class="btn btn-sm btn-danger" type="button" title="Delete" data-action="/backups/<%= b.id %>/delete" data-name="<%= b.server_name %>" onclick="deleteOne(this, this.dataset.action, 'Delete the backup of \'' + this.dataset.name + '\'? This cannot be undone.')"><i data-lucide="trash-2"></i></button>
               <% } %>
             </td>
           </tr>

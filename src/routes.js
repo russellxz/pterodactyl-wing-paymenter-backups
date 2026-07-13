@@ -385,18 +385,55 @@ router.get('/backups', (req, res) => {
       (SELECT COALESCE(SUM(size),0) FROM backups b WHERE b.node_id = n.id AND b.type = 'server') AS total_size
     FROM nodes n ORDER BY n.id
   `).all();
-  const panelBackups = db.prepare(`
-    SELECT b.*, p.name AS panel_name FROM backups b
-    LEFT JOIN panels p ON p.id = b.panel_id
-    WHERE b.type = 'panel_db' ORDER BY b.id DESC LIMIT 300
+  // Copias de base de datos agrupadas por día (como las fechas de los nodos):
+  // una tarjeta por día con cuántas copias hay y el espacio que ocupan.
+  const panelDays = db.prepare(`
+    SELECT substr(created_at, 1, 10) AS day,
+      COUNT(*) AS cnt,
+      COALESCE(SUM(size), 0) AS total_size,
+      MAX(created_at) AS last_at
+    FROM backups WHERE type = 'panel_db'
+    GROUP BY day ORDER BY day DESC
   `).all();
-  const paymenterBackups = db.prepare(`
-    SELECT b.*, pm.name AS paymenter_name FROM backups b
-    LEFT JOIN paymenters pm ON pm.id = b.paymenter_id
-    WHERE b.type = 'paymenter_db' ORDER BY b.id DESC LIMIT 300
+  const paymenterDays = db.prepare(`
+    SELECT substr(created_at, 1, 10) AS day,
+      COUNT(*) AS cnt,
+      COALESCE(SUM(size), 0) AS total_size,
+      MAX(created_at) AS last_at
+    FROM backups WHERE type = 'paymenter_db'
+    GROUP BY day ORDER BY day DESC
   `).all();
   const paymenters = db.prepare('SELECT id, name FROM paymenters ORDER BY id').all();
-  res.render('backups', { title: 'Backups', active: 'backups', nodes, panelBackups, paymenterBackups, paymenters });
+  res.render('backups', { title: 'Backups', active: 'backups', nodes, panelDays, paymenterDays, paymenters });
+});
+
+// Copias de base de datos (panel o Paymenter) de un día concreto.
+router.get('/db-backups/:type/:day', (req, res) => {
+  const type = req.params.type === 'paymenter' ? 'paymenter_db' : 'panel_db';
+  const day = req.params.day; // 'YYYY-MM-DD'
+  const isPaymenter = type === 'paymenter_db';
+  let backups;
+  if (isPaymenter) {
+    backups = db.prepare(`
+      SELECT b.*, pm.name AS owner_label FROM backups b
+      LEFT JOIN paymenters pm ON pm.id = b.paymenter_id
+      WHERE b.type = 'paymenter_db' AND substr(b.created_at, 1, 10) = ?
+      ORDER BY b.id DESC
+    `).all(day);
+  } else {
+    backups = db.prepare(`
+      SELECT b.*, p.name AS owner_label FROM backups b
+      LEFT JOIN panels p ON p.id = b.panel_id
+      WHERE b.type = 'panel_db' AND substr(b.created_at, 1, 10) = ?
+      ORDER BY b.id DESC
+    `).all(day);
+  }
+  res.render('db_backups', {
+    title: `${isPaymenter ? 'Paymenter' : 'Panel'} DB — ${day}`,
+    active: 'backups',
+    kind: isPaymenter ? 'paymenter' : 'panel',
+    day, backups,
+  });
 });
 
 // Fechas de copia de UN nodo

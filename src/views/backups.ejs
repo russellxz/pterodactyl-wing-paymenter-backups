@@ -2,7 +2,7 @@
 
 <header class="page-head">
   <h1>Backups</h1>
-  <p>Node backups are organized by date inside each node. Panel and Paymenter database backups live in their own sections.</p>
+  <p>Everything is organized by date. Node backups group by date inside each node; panel and Paymenter database backups group by day too — open a day to see its backups.</p>
 </header>
 
 <% if (can('run_backups')) { %>
@@ -48,50 +48,24 @@
   <% } %>
 </section>
 
+
 <section class="card">
   <h2><i data-lucide="database"></i>Panel database backups</h2>
-  <p class="muted small">These backups are independent: restoring node dates never touches the panel database.</p>
-  <% if (panelBackups.length) { %>
-  <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected panel database backups? This cannot be undone.">
-    <% if (can('delete_backups')) { %>
-    <div class="bulk-toolbar">
-      <button class="btn btn-sm" type="button" onclick="toggleSelectAll(this)"><i data-lucide="check-square"></i><span class="sa-label">Select all</span></button>
-      <div class="bulk-bar" hidden>
-        <span class="bulk-count"><b>0</b> selected</span>
-        <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+  <p class="muted small">Organized by day, like the node backups. Open a day to see every backup taken that date, download, restore or delete them. These backups are independent: restoring node dates never touches the panel database.</p>
+  <% if (panelDays.length) { %>
+  <div class="node-grid">
+    <% panelDays.forEach(d => { %>
+    <a class="node-card" href="/db-backups/panel/<%= d.day %>">
+      <div class="node-card-head"><i data-lucide="database"></i><span><%= d.day %></span></div>
+      <div class="node-card-stats">
+        <div><span class="muted small">Backups</span><b><%= d.cnt %></b></div>
+        <div><span class="muted small">Disk</span><b><%= fmtSize(d.total_size) %></b></div>
       </div>
-    </div>
-    <% } %>
-    <div class="table-wrap">
-      <table class="bulk-table">
-        <thead><tr>
-          <% if (can('delete_backups')) { %><th class="col-check"><input type="checkbox" class="bulk-all" title="Select all"></th><% } %>
-          <th>Panel</th><th>Size</th><th>Date</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          <% panelBackups.forEach(b => { %>
-          <tr>
-            <% if (can('delete_backups')) { %><td class="col-check"><input type="checkbox" class="bulk-item" name="ids" value="<%= b.id %>"></td><% } %>
-            <td><span class="badge badge-db"><i data-lucide="database"></i><%= b.panel_name || 'Deleted panel' %></span></td>
-            <td><%= fmtSize(b.size) %></td>
-            <td class="muted"><%= b.created_at %></td>
-            <td class="row-actions">
-              <% if (can('download_backups')) { %>
-              <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
-              <% } %>
-              <% if (can('restore_backups')) { %>
-              <button class="btn btn-sm" type="button" title="Restore panel DB" onclick="openPanelRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
-              <% } %>
-              <% if (can('delete_backups')) { %>
-              <button class="btn btn-sm btn-danger" type="button" title="Delete" onclick="deleteOne(this, '/backups/<%= b.id %>/delete', 'Delete this panel database backup? This cannot be undone.')"><i data-lucide="trash-2"></i></button>
-              <% } %>
-            </td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </form>
+      <div class="muted small">Last: <b><%= d.last_at %></b></div>
+      <span class="node-card-link">View backups <i data-lucide="arrow-right"></i></span>
+    </a>
+    <% }) %>
+  </div>
   <% } else { %>
   <p class="empty"><i data-lucide="inbox"></i>No panel database backups yet.</p>
   <% } %>
@@ -99,117 +73,24 @@
 
 <section class="card">
   <h2><i data-lucide="credit-card"></i>Paymenter database backups</h2>
-  <p class="muted small">Each backup includes the full Paymenter database (mysqldump) plus its <code>.env</code> file. You can restore it to the same VPS or to a new one. These backups never touch the panel or the nodes.</p>
-  <% if (paymenterBackups.length) { %>
-  <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected Paymenter database backups? This cannot be undone.">
-    <% if (can('delete_backups')) { %>
-    <div class="bulk-toolbar">
-      <button class="btn btn-sm" type="button" onclick="toggleSelectAll(this)"><i data-lucide="check-square"></i><span class="sa-label">Select all</span></button>
-      <div class="bulk-bar" hidden>
-        <span class="bulk-count"><b>0</b> selected</span>
-        <button class="btn btn-sm btn-danger" type="submit"><i data-lucide="trash-2"></i>Delete selected</button>
+  <p class="muted small">Organized by day too. Each backup includes the full Paymenter database (mysqldump) plus its <code>.env</code> file. These backups never touch the panel or the nodes.</p>
+  <% if (paymenterDays.length) { %>
+  <div class="node-grid">
+    <% paymenterDays.forEach(d => { %>
+    <a class="node-card" href="/db-backups/paymenter/<%= d.day %>">
+      <div class="node-card-head"><i data-lucide="credit-card"></i><span><%= d.day %></span></div>
+      <div class="node-card-stats">
+        <div><span class="muted small">Backups</span><b><%= d.cnt %></b></div>
+        <div><span class="muted small">Disk</span><b><%= fmtSize(d.total_size) %></b></div>
       </div>
-    </div>
-    <% } %>
-    <div class="table-wrap">
-      <table class="bulk-table">
-        <thead><tr>
-          <% if (can('delete_backups')) { %><th class="col-check"><input type="checkbox" class="bulk-all" title="Select all"></th><% } %>
-          <th>Paymenter</th><th>Size</th><th>Date</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          <% paymenterBackups.forEach(b => { %>
-          <tr>
-            <% if (can('delete_backups')) { %><td class="col-check"><input type="checkbox" class="bulk-item" name="ids" value="<%= b.id %>"></td><% } %>
-            <td><span class="badge badge-pay"><i data-lucide="credit-card"></i><%= b.paymenter_name || 'Deleted Paymenter' %></span></td>
-            <td><%= fmtSize(b.size) %></td>
-            <td class="muted"><%= b.created_at %></td>
-            <td class="row-actions">
-              <% if (can('download_backups')) { %>
-              <a class="btn btn-sm" href="/backups/<%= b.id %>/download" title="Download"><i data-lucide="download"></i></a>
-              <% } %>
-              <% if (can('restore_backups')) { %>
-              <button class="btn btn-sm" type="button" title="Restore Paymenter DB" onclick="openPaymenterRestore(<%= b.id %>)"><i data-lucide="history"></i></button>
-              <% } %>
-              <% if (can('delete_backups')) { %>
-              <button class="btn btn-sm btn-danger" type="button" title="Delete" onclick="deleteOne(this, '/backups/<%= b.id %>/delete', 'Delete this Paymenter database backup? This cannot be undone.')"><i data-lucide="trash-2"></i></button>
-              <% } %>
-            </td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </form>
+      <div class="muted small">Last: <b><%= d.last_at %></b></div>
+      <span class="node-card-link">View backups <i data-lucide="arrow-right"></i></span>
+    </a>
+    <% }) %>
+  </div>
   <% } else { %>
   <p class="empty"><i data-lucide="inbox"></i>No Paymenter backups yet.<% if (!paymenters.length) { %>&nbsp;Add your Paymenter in <a href="/paymenter">Paymenter</a> and use "Back up now" choosing "Paymenter database only".<% } %></p>
   <% } %>
 </section>
-
-<% if (can('restore_backups') && paymenterBackups.length) { %>
-<dialog id="paymenter-restore" class="modal">
-  <form method="post" action="/restore-paymenter" class="form">
-    <h2><i data-lucide="credit-card"></i>Restore a Paymenter database</h2>
-    <label>Backup to restore
-      <select name="backup_id" id="paymenter-backup-select">
-        <% paymenterBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.paymenter_name || 'Deleted Paymenter') %> — <%= b.created_at %></option><% }) %>
-      </select>
-    </label>
-    <label>Destination
-      <select name="mode" onchange="document.getElementById('paymenter-custom-target').hidden = this.value !== 'custom'">
-        <option value="saved">The Paymenter of this backup (saved settings)</option>
-        <option value="custom">Another VPS (new Paymenter)</option>
-      </select>
-    </label>
-    <div id="paymenter-custom-target" hidden class="form-grid">
-      <label>New VPS IP<input name="host" placeholder="203.0.113.40"></label>
-      <label>SSH port<input name="ssh_port" type="number" value="22"></label>
-      <label>SSH user<input name="ssh_user" value="root"></label>
-      <label>SSH password<input name="ssh_password" type="password"></label>
-      <label>Database user<input name="db_user" value="paymenter"></label>
-      <label>Database password<input name="db_password" type="password"></label>
-      <label>Database name<input name="db_name" value="paymenter"></label>
-    </div>
-    <p class="muted small">The destination VPS must already have Paymenter installed (with its database created). The .zip also includes the original <code>.env</code> file in case you need to copy it to <code>/var/www/paymenter/.env</code>. After restoring, clear Paymenter's caches on that VPS with <code>php artisan optimize:clear</code>.</p>
-    <div class="form-actions">
-      <button class="btn" type="button" onclick="document.getElementById('paymenter-restore').close()">Cancel</button>
-      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore database</button>
-    </div>
-  </form>
-</dialog>
-<% } %>
-
-<% if (can('restore_backups') && panelBackups.length) { %>
-<dialog id="panel-restore" class="modal">
-  <form method="post" action="/restore-panel" class="form">
-    <h2><i data-lucide="database"></i>Restore a panel database</h2>
-    <label>Backup to restore
-      <select name="backup_id" id="panel-backup-select">
-        <% panelBackups.forEach(b => { %><option value="<%= b.id %>"><%= (b.panel_name || 'Deleted panel') %> — <%= b.created_at %></option><% }) %>
-      </select>
-    </label>
-    <label>Destination
-      <select name="mode" onchange="document.getElementById('custom-target').hidden = this.value !== 'custom'">
-        <option value="saved">The panel of this backup (saved settings)</option>
-        <option value="custom">Another VPS (new panel)</option>
-      </select>
-    </label>
-    <div id="custom-target" hidden class="form-grid">
-      <label>New panel IP<input name="host" placeholder="203.0.113.30"></label>
-      <label>SSH port<input name="ssh_port" type="number" value="22"></label>
-      <label>SSH user<input name="ssh_user" value="root"></label>
-      <label>SSH password<input name="ssh_password" type="password"></label>
-      <label>Database user<input name="db_user" value="pterodactyl"></label>
-      <label>Database password<input name="db_password" type="password"></label>
-      <label>Database name<input name="db_name" value="panel"></label>
-    </div>
-    <p class="muted small">The destination panel must already have Pterodactyl installed (with its database created). The .zip also includes the original <code>.env</code> file in case you need to copy it to <code>/var/www/pterodactyl/.env</code>.</p>
-    <div class="form-actions">
-      <button class="btn" type="button" onclick="document.getElementById('panel-restore').close()">Cancel</button>
-      <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore database</button>
-    </div>
-  </form>
-</dialog>
-<% } %>
 
 <%- include('partials/foot') %>

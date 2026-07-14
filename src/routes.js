@@ -78,7 +78,13 @@ function scheduleParts() {
     if (oldest && oldest.m) {
       // created_at está en hora local ('YYYY-MM-DD HH:MM:SS'); lo interpreto como local.
       const t = new Date(oldest.m.replace(' ', 'T')).getTime();
-      if (!isNaN(t)) nextCleanup = t + retentionH * 3600 * 1000;
+      if (!isNaN(t)) {
+        nextCleanup = t + retentionH * 3600 * 1000;
+        // Si la copia más antigua ya superó su edad límite, se borrará en la
+        // próxima revisión (cada 2 min). Para no mostrar un tiempo negativo,
+        // apuntamos a esa próxima pasada (como mucho, dentro de 2 min).
+        if (nextCleanup < Date.now()) nextCleanup = Date.now() + 2 * 60 * 1000;
+      }
     }
   }
 

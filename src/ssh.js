@@ -2,7 +2,8 @@
 // No hace falta instalar "sshpass": la app se conecta por SSH directamente desde Node.js.
 const crypto = require('crypto');
 const { Client } = require('ssh2');
-const { getSetting, setSetting } = require('./db');
+const { getSetting, setSetting, clearHostKey } = require('./db');
+const logger = require('./logger');
 
 // Escapa un texto para usarlo de forma segura dentro de un comando de shell.
 function sq(value) {
@@ -11,25 +12,46 @@ function sq(value) {
 
 // Verificación de host key (TOFU: trust-on-first-use). La primera vez que nos
 // conectamos a un VPS guardamos la huella (SHA-256) de su clave; en las
-// siguientes conexiones comprobamos que no haya cambiado. Si cambia, se
-// rechaza la conexión: podría ser un ataque man-in-the-middle. Esto evita
-// aceptar a ciegas cualquier clave, como hacía antes.
+// siguientes conexiones comprobamos que no haya cambiado.
+//
+// Si la huella cambia (lo normal cuando se reinstala, migra o reconstruye el
+// VPS, o cuando el proveedor le regenera las claves de SSH), NO bloqueamos la
+// conexión: borramos la huella vieja, guardamos la nueva y seguimos. Antes se
+// rechazaba y las copias se quedaban paradas hasta que un administrador
+// limpiara la huella a mano, que era justo lo que rompía las copias
+// automáticas. El cambio queda registrado en los Logs con la huella vieja y la
+// nueva, para poder revisarlo si no se esperaba.
 function hostKeyId(host, port) {
   return `hostkey_${host}_${Number(port) || 22}`;
 }
 
 function makeHostVerifier(host, port) {
   return (key) => {
-    const fp = crypto.createHash('sha256').update(key).digest('base64');
-    const settingKey = hostKeyId(host, port);
-    const known = getSetting(settingKey, '');
-    if (!known) {
-      // Primera vez: confiamos y guardamos la huella.
-      setSetting(settingKey, fp);
-      return true;
+    try {
+      const fp = crypto.createHash('sha256').update(key).digest('base64');
+      const settingKey = hostKeyId(host, port);
+      const known = getSetting(settingKey, '');
+      if (!known) {
+        // Primera vez: confiamos y guardamos la huella.
+        setSetting(settingKey, fp);
+      } else if (known !== fp) {
+        // La huella cambió: la borramos, guardamos la nueva y dejamos pasar la
+        // conexión para que las copias no se detengan.
+        clearHostKey(host, port);
+        setSetting(settingKey, fp);
+        logger.warn(
+          `SSH ${host}:${Number(port) || 22}: the server's host key changed ` +
+          `(old SHA256:${known} — new SHA256:${fp}). The saved fingerprint was cleared and the new key ` +
+          `trusted automatically so backups keep running. This is normal if you rebuilt, migrated or ` +
+          `reinstalled this VPS; if you did not, check the server.`
+        );
+      }
+    } catch (e) {
+      // Guardar la huella es solo para dejar constancia: si la base de datos
+      // falla, no vale la pena cortar la copia por ello.
+      logger.warn(`SSH ${host}: could not save the host fingerprint (${e.message}).`);
     }
-    // Ya la conocíamos: solo aceptamos si coincide.
-    return known === fp;
+    return true;
   };
 }
 
@@ -39,9 +61,12 @@ function connect(cfg) {
     conn
       .on('ready', () => resolve(conn))
       .on('error', (err) => {
-        // ssh2 rechaza con este mensaje cuando el hostVerifier devuelve false.
+        // El cambio de huella ya no bloquea la conexión (se acepta la clave
+        // nueva automáticamente), así que un error de host key aquí significa
+        // que el servidor y esta app no tienen ningún algoritmo de clave en
+        // común, no que la huella haya cambiado.
         if (/host.?key|verification/i.test(err.message)) {
-          reject(new Error(`SSH ${cfg.host}: the server's host key changed since the last connection. If you rebuilt or migrated this VPS this is expected — otherwise it could be an attack. To accept the new key, an administrator must clear its saved fingerprint.`));
+          reject(new Error(`SSH ${cfg.host}: could not agree on a host key with the server (${err.message}). Check that its SSH service is up to date and reachable on port ${Number(cfg.port) || 22}.`));
         } else {
           reject(new Error(`SSH ${cfg.host}: ${err.message}`));
         }

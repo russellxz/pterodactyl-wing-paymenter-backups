@@ -164,9 +164,10 @@ function setSetting(key, value) {
   ).run(key, String(value));
 }
 
-// Borra la huella SSH guardada de un host:puerto. Se usa cuando el admin cambia
-// la IP de un nodo/panel/Paymenter (o reconstruye el VPS), para que la próxima
-// conexión vuelva a confiar en la clave nueva (trust-on-first-use).
+// Borra la huella SSH guardada de un host:puerto, para que la próxima conexión
+// vuelva a confiar en la clave nueva (trust-on-first-use). Se usa cuando el
+// admin cambia la IP o el puerto de un nodo/panel/Paymenter y, en src/ssh.js,
+// de forma automática cuando el VPS presenta una clave distinta a la guardada.
 function clearHostKey(host, port) {
   db.prepare('DELETE FROM settings WHERE key = ?').run(`hostkey_${host}_${Number(port) || 22}`);
 }

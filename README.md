@@ -349,6 +349,7 @@ More details and troubleshooting for the extension in `extension/README.md`.
 • **Backups come out as "Unknown":** the panel DB details are wrong; check them in "Nodes and Panel" and use Test connection.
 • **A server is skipped as "empty":** its volume has no files yet; that's normal.
 • **I changed APP_SECRET and nothing connects:** the saved passwords are encrypted with that key; re-enter the node and panel passwords on the web.
+• **"The server's host key changed":** you no longer have to do anything. If you reinstall, migrate or rebuild a VPS, its SSH key changes; the system clears the old fingerprint, trusts the new key and carries on with the backup, leaving a warning in **Logs** with the old and new fingerprints. If you did not touch that VPS, review the warning — an unexpected key change is worth looking into.
 
 ## Security notes
 

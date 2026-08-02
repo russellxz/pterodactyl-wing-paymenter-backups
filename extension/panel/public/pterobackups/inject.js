@@ -1,12 +1,24 @@
-// PteroBackups - inject.js (v3)
+// PteroBackups - inject.js (v4)
 // Anade la opcion "Backup 2.0" al menu lateral de cada servidor SIN
 // recompilar el panel. Clona la fila "Files" del menu del tema activo
 // (panel normal, Arix, etc.) y la convierte en el enlace a Backup 2.0.
 // No usa boton flotante ni anade nada fuera del menu.
+//
+// v4 (rendimiento): antes este script escaneaba TODOS los elementos de la
+// pagina en cada mutacion del DOM, y como el propio script inserta nodos se
+// realimentaba a si mismo. En moviles (sobre todo en "modo escritorio", donde
+// el panel dibuja muchisimos mas elementos) eso saturaba la CPU y dejaba al
+// navegador sin recursos para resolver el reto de Cloudflare. Ahora el trabajo
+// se agrupa, se ignoran las mutaciones propias, el escaneo profundo solo se
+// hace si hace falta y todo se detiene con la pestana en segundo plano.
 (function () {
   'use strict';
 
   var LABEL = 'Backup 2.0';
+  var scheduled = false;   // ya hay un inject() pendiente
+  var busy = false;        // estamos modificando el DOM nosotros mismos
+  var lastDeepScan = 0;    // ultimo escaneo del shadow DOM (ms)
+  var DEEP_SCAN_EVERY = 3000;
 
   function currentShort() {
     var m = window.location.pathname.match(/\/server\/([a-zA-Z0-9-]{4,40})(\/|$)/);
@@ -25,6 +37,9 @@
     return '/pterobackups/server/' + short;
   }
 
+  // Escaneo profundo (shadow DOM). Es lo mas caro que hace este script, asi
+  // que solo se usa cuando la busqueda normal no encuentra nada y como mucho
+  // una vez cada DEEP_SCAN_EVERY ms.
   function queryAllDeep(selector, root, out) {
     root = root || document;
     out = out || [];
@@ -50,9 +65,22 @@
   function findFilesRows(short) {
     var rows = [];
     var seen = [];
-    var anchors = queryAllDeep('a[href$="/server/' + short + '/files"]');
-    var more = queryAllDeep('a[href*="/server/' + short + '/files"]');
-    for (var k = 0; k < more.length; k++) anchors.push(more[k]);
+    var sel = 'a[href*="/server/' + short + '/files"]';
+
+    // 1) Busqueda normal (barata). Cubre el panel estandar y los temas
+    //    habituales, que no usan shadow DOM.
+    var anchors = [];
+    var plain = document.querySelectorAll(sel);
+    for (var p = 0; p < plain.length; p++) anchors.push(plain[p]);
+
+    // 2) Solo si no aparecio nada, probamos dentro del shadow DOM.
+    if (!anchors.length) {
+      var now = Date.now();
+      if (now - lastDeepScan >= DEEP_SCAN_EVERY) {
+        lastDeepScan = now;
+        anchors = queryAllDeep(sel);
+      }
+    }
 
     for (var i = 0; i < anchors.length; i++) {
       var a = anchors[i];
@@ -121,38 +149,69 @@
   }
 
   function inject() {
+    // Fuera de las paginas de servidor no hay nada que hacer: salimos antes
+    // de tocar el DOM para no gastar CPU en el resto del panel.
     var short = currentShort();
 
     if (!short) {
-      removeAllClones();
+      if (document.querySelector('.pb-nav-clone')) removeAllClones();
       return;
     }
 
     var rows = findFilesRows(short);
 
     if (!rows.length) {
-      removeAllClones();
+      if (document.querySelector('.pb-nav-clone')) removeAllClones();
       return;
     }
 
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      var next = row.nextElementSibling;
-      if (next && next.classList && next.classList.contains('pb-nav-clone')) {
-        var link = next.tagName === 'A' ? next : next.querySelector('a');
-        if (link) link.setAttribute('href', targetUrl(short));
-        continue;
+    busy = true; // ignora las mutaciones que provoquemos nosotros
+    try {
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var next = row.nextElementSibling;
+        if (next && next.classList && next.classList.contains('pb-nav-clone')) {
+          var link = next.tagName === 'A' ? next : next.querySelector('a');
+          if (link && link.getAttribute('href') !== targetUrl(short)) {
+            link.setAttribute('href', targetUrl(short));
+          }
+          continue;
+        }
+        if (row.parentNode) {
+          row.parentNode.insertBefore(makeClone(row, short), row.nextSibling);
+        }
       }
-      if (row.parentNode) {
-        row.parentNode.insertBefore(makeClone(row, short), row.nextSibling);
-      }
+    } finally {
+      // Se libera en el siguiente ciclo para que las mutaciones propias ya
+      // hayan llegado al observer.
+      setTimeout(function () { busy = false; }, 0);
     }
   }
 
+  // Agrupa las rafagas de mutaciones en una sola pasada.
+  function scheduleInject() {
+    if (scheduled || busy) return;
+    if (document.hidden) return; // en segundo plano no gastamos CPU
+    scheduled = true;
+    setTimeout(function () {
+      scheduled = false;
+      try { inject(); } catch (e) {}
+    }, 250);
+  }
+
   try {
-    var observer = new MutationObserver(function () { inject(); });
+    var observer = new MutationObserver(scheduleInject);
     observer.observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
-  setInterval(inject, 1200);
-  inject();
+
+  // Red de seguridad por si alguna navegacion interna no genera mutaciones.
+  setInterval(function () {
+    if (!document.hidden) scheduleInject();
+  }, 3000);
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) scheduleInject();
+  });
+
+  scheduleInject();
 })();

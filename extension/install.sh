@@ -101,10 +101,12 @@ fi
 
 # Refuerzo para temas como Arix: su wrapper incluye layouts/scripts.blade.php,
 # así el botón sobrevive aunque el tema reemplace el wrapper al actualizarse.
+# Se pasa por inject_script para que TAMBIÉN lleve ?v=<versión>: si no, el
+# navegador y Cloudflare se quedan con el .js viejo en caché para siempre y
+# las mejoras nunca llegan al usuario.
 S="$PANEL/resources/views/layouts/scripts.blade.php"
-if [ -f "$S" ] && ! grep -q 'pterobackups/inject.js' "$S"; then
-  printf '\n<script src="/pterobackups/inject.js" defer></script>\n' >> "$S"
-  echo "    OK: refuerzo añadido en layouts/scripts.blade.php"
+if [ -f "$S" ]; then
+  inject_script "$S" "/pterobackups/inject.js"
 fi
 
 # 5) Limpiar cachés del panel y ajustar permisos

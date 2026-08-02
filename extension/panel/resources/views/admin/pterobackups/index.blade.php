@@ -218,9 +218,43 @@ function pbRenderJob(j) {
     }
 }
 
-function pbPollJob() {
-    pbApi('/api/job').then(pbRenderJob).catch(function () {});
+// Consulta del estado con ritmo adaptativo: rapido solo mientras hay una
+// tarea corriendo, lento cuando no pasa nada, en pausa si la pestana esta
+// oculta y con esperas crecientes si algo falla (asi no machacamos a
+// Cloudflare cuando nos frena, que es lo que provocaba los bloqueos).
+var PB_POLL_FAST = 3000;
+var PB_POLL_IDLE = 30000;
+var pbPollTimer = null;
+var pbPollFails = 0;
+var pbPollStopped = false;
+
+function pbSchedulePoll(ms) {
+    if (pbPollStopped) return;
+    clearTimeout(pbPollTimer);
+    pbPollTimer = setTimeout(pbPollJob, ms);
 }
+
+function pbPollJob() {
+    if (pbPollStopped) return;
+    clearTimeout(pbPollTimer); // evita dos bucles solapados
+    if (document.hidden) { pbSchedulePoll(PB_POLL_IDLE); return; }
+    pbApi('/api/job')
+        .then(function (j) {
+            if (!j || j.ok === false) throw new Error((j && j.message) || 'error');
+            pbPollFails = 0;
+            pbRenderJob(j);
+            pbSchedulePoll(j.active ? PB_POLL_FAST : PB_POLL_IDLE);
+        })
+        .catch(function () {
+            pbPollFails++;
+            if (pbPollFails >= 6) { pbPollStopped = true; return; }
+            pbSchedulePoll(Math.min(PB_POLL_IDLE * pbPollFails, 180000));
+        });
+}
+
+document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && !pbPollStopped) pbSchedulePoll(500);
+});
 
 function pbFmtDur(target) {
     var s = Math.max(0, Math.floor((target - (Date.now() + pbOffset)) / 1000));
@@ -441,9 +475,8 @@ function pbSaveSchedule() {
 // --------------------------- Arranque ---------------------------
 pbLoadOverview();
 pbLoadSchedule();
-pbPollJob();
-setInterval(pbPollJob, 3000);
-setInterval(pbCountdown, 1000);
+pbPollJob(); // se reprograma solo segun haya o no tarea en marcha
+setInterval(function () { if (!document.hidden) pbCountdown(); }, 1000);
 </script>
 @endif
 @endsection

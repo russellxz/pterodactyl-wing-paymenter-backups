@@ -166,19 +166,30 @@
             return !!hay;
         }
 
-        function renderJob(j) {
-            // Contador de proxima copia. Al usuario le mostramos el de los NODOS
-            // (los archivos de su servidor), no el genérico ni el de la base de
-            // datos, que no le sirve de nada.
+        // Momento de la proxima copia de NODOS, ya pasado al reloj del
+        // navegador. Asi el contador se repinta solo, sin pedir nada al
+        // servidor: menos peticiones = menos probabilidades de que Cloudflare
+        // nos tome por un bot.
+        var pbNextAt = null;
+
+        function renderNextCard() {
             var nextCard = document.getElementById('pb-next');
-            var nextNodes = j ? (j.next_run_nodes || null) : null;
-            if (nextNodes) {
-                var now = (j.server_now || Date.now());
-                document.getElementById('pb-next-value').textContent = fmtCountdown(nextNodes - now);
+            if (!nextCard) return;
+            if (pbNextAt) {
+                document.getElementById('pb-next-value').textContent = fmtCountdown(pbNextAt - Date.now());
                 nextCard.hidden = false;
             } else {
                 nextCard.hidden = true;
             }
+        }
+
+        function renderJob(j) {
+            // Contador de proxima copia. Al usuario le mostramos el de los NODOS
+            // (los archivos de su servidor), no el genérico ni el de la base de
+            // datos, que no le sirve de nada.
+            var nextNodes = j ? (j.next_run_nodes || null) : null;
+            pbNextAt = nextNodes ? Date.now() + (nextNodes - (j.server_now || Date.now())) : null;
+            renderNextCard();
 
             // Barra de progreso SOLO si la restauracion es de este servidor
             var card = document.getElementById('pb-job');
@@ -203,16 +214,60 @@
             }
         }
 
+        // --------------------------------------------------------------
+        // Consulta del estado. Antes se pedia cada 4 segundos SIN PARAR,
+        // aunque no hubiera nada corriendo, aunque la pestana estuviera en
+        // segundo plano y aunque fallara: eso son ~900 peticiones por hora
+        // por pestana abierta, un patron que Cloudflare interpreta como bot
+        // (sobre todo desde el movil en "modo escritorio", donde el navegador
+        // ya envia una firma rara). Ahora:
+        //   - rapido solo mientras hay una tarea en marcha,
+        //   - lento cuando no pasa nada,
+        //   - en pausa con la pestana oculta,
+        //   - y si algo falla se espera cada vez mas en vez de insistir.
+        var POLL_FAST = 4000;
+        var POLL_IDLE = 30000;
+        var pollTimer = null;
+        var pollFails = 0;
+        var pollStopped = false;
+
+        function schedulePoll(ms) {
+            if (pollStopped) return;
+            clearTimeout(pollTimer);
+            pollTimer = setTimeout(pollJob, ms);
+        }
+
         function pollJob() {
+            if (pollStopped) return;
+            clearTimeout(pollTimer); // evita dos bucles solapados
+            if (document.hidden) { schedulePoll(POLL_IDLE); return; }
             fetch(BASE + '/job', { headers: { 'Accept': 'application/json' } })
                 .then(readJson)
-                .then(renderJob)
-                .catch(function () {});
+                .then(function (j) {
+                    if (!j || j.ok === false) throw new Error((j && j.message) || 'error');
+                    pollFails = 0;
+                    renderJob(j);
+                    schedulePoll(j.active ? POLL_FAST : POLL_IDLE);
+                })
+                .catch(function () {
+                    // Insistir al mismo ritmo cuando Cloudflare nos frena es
+                    // justo lo que empeora el bloqueo: esperamos cada vez mas
+                    // y al final paramos del todo.
+                    pollFails++;
+                    if (pollFails >= 6) { pollStopped = true; return; }
+                    schedulePoll(Math.min(POLL_IDLE * pollFails, 180000));
+                });
         }
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && !pollStopped) schedulePoll(500);
+        });
+
+        // El contador se repinta solo, sin red.
+        setInterval(renderNextCard, 15000);
 
         loadList();
         pollJob();
-        setInterval(pollJob, 4000);
     })();
     </script>
     @endif

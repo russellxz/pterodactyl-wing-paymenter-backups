@@ -47,5 +47,17 @@
   } else {
     inject();
   }
-  setInterval(inject, 2000);
+
+  // Antes esto se repetia cada 2s para siempre. El area admin no es una SPA:
+  // en cuanto el enlace esta puesto no hay nada mas que hacer, asi que el
+  // reintento se detiene solo (y se pausa con la pestana en segundo plano).
+  var tries = 0;
+  var timer = setInterval(function () {
+    if (document.hidden) return;
+    if (document.getElementById('pb-admin-nav') || ++tries > 15) {
+      clearInterval(timer);
+      return;
+    }
+    inject();
+  }, 2000);
 })();

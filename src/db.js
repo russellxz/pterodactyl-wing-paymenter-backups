@@ -51,7 +51,9 @@ CREATE TABLE IF NOT EXISTS nodes (
 );
 
 -- Instalaciones de Paymenter (panel de facturación). Se copia su base de
--- datos (mysqldump) + su archivo .env, igual que con el panel de Pterodactyl.
+-- datos completa (mysqldump: incluye las tablas que crean las extensiones),
+-- su archivo .env y sus archivos subidos (logos, imágenes), extensiones y
+-- temas, para poder migrar la instalación entera a otro VPS.
 CREATE TABLE IF NOT EXISTS paymenters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -63,6 +65,8 @@ CREATE TABLE IF NOT EXISTS paymenters (
   db_password TEXT NOT NULL,
   db_name TEXT NOT NULL DEFAULT 'paymenter',
   env_path TEXT NOT NULL DEFAULT '/var/www/paymenter/.env',
+  install_path TEXT NOT NULL DEFAULT '/var/www/paymenter',
+  backup_files INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
@@ -119,6 +123,18 @@ if (!hasColumn('backups', 'snapshot_id')) db.exec('ALTER TABLE backups ADD COLUM
 if (!hasColumn('backups', 'panel_id')) db.exec('ALTER TABLE backups ADD COLUMN panel_id INTEGER');
 // v3.7: copias de la BD de Paymenter (tipo 'paymenter_db')
 if (!hasColumn('backups', 'paymenter_id')) db.exec('ALTER TABLE backups ADD COLUMN paymenter_id INTEGER');
+// v4.0: copia COMPLETA de Paymenter (base de datos + archivos subidos +
+// extensiones + temas). Las copias antiguas siguen valiendo: son las que
+// tienen has_files = 0 (solo base de datos y .env).
+if (!hasColumn('paymenters', 'install_path')) {
+  db.exec("ALTER TABLE paymenters ADD COLUMN install_path TEXT NOT NULL DEFAULT '/var/www/paymenter'");
+}
+if (!hasColumn('paymenters', 'backup_files')) {
+  db.exec('ALTER TABLE paymenters ADD COLUMN backup_files INTEGER NOT NULL DEFAULT 1');
+}
+if (!hasColumn('backups', 'has_files')) db.exec('ALTER TABLE backups ADD COLUMN has_files INTEGER NOT NULL DEFAULT 0');
+// Inventario de lo que se guardó (tablas, extensiones, temas...) en JSON.
+if (!hasColumn('backups', 'manifest')) db.exec('ALTER TABLE backups ADD COLUMN manifest TEXT');
 
 // 1) La tabla antigua panel_config (un solo panel) pasa a la tabla panels
 const legacyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='panel_config'").get();

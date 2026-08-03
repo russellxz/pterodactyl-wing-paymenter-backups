@@ -243,18 +243,28 @@ router.post('/panels/:id/test', requirePerm('manage_nodes'), wrap(async (req, re
 // ---------------------------------------------------------------------------
 // Paymenter (puede haber varias instalaciones)
 // ---------------------------------------------------------------------------
+// Carpeta donde está instalado Paymenter. Si el admin la deja vacía, se deduce
+// del .env (/var/www/paymenter/.env -> /var/www/paymenter).
+function installPathFrom(body) {
+  const raw = String(body.install_path || '').trim();
+  if (raw) return raw.replace(/\/+$/, '');
+  const env = String(body.env_path || '/var/www/paymenter/.env').trim();
+  return env.replace(/\/[^/]*$/, '') || '/var/www/paymenter';
+}
+
 router.post('/paymenters', requirePerm('manage_nodes'), (req, res) => {
   const { name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path } = req.body;
   if (!name || !host || !ssh_password || !db_password) {
     return go(res, '/paymenter', null, 'Name, IP, SSH password and database password are required.');
   }
   db.prepare(`
-    INSERT INTO paymenters (name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO paymenters (name, host, ssh_port, ssh_user, ssh_password, db_user, db_password, db_name, env_path, install_path, backup_files)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
     encrypt(ssh_password), (db_user || 'paymenter').trim(), encrypt(db_password),
-    (db_name || 'paymenter').trim(), (env_path || '/var/www/paymenter/.env').trim()
+    (db_name || 'paymenter').trim(), (env_path || '/var/www/paymenter/.env').trim(),
+    installPathFrom(req.body), req.body.backup_files === '0' ? 0 : 1
   );
   logger.info(`Paymenter added: "${name}" (${host}).`);
   go(res, '/paymenter', `Paymenter "${name}" added.`);
@@ -267,7 +277,7 @@ router.post('/paymenters/:id/update', requirePerm('manage_nodes'), (req, res) =>
   if (!name || !host) return go(res, '/paymenter', null, 'Name and IP are required.');
   if (host.trim() !== pm.host || (parseInt(ssh_port, 10) || 22) !== pm.ssh_port) clearHostKey(pm.host, pm.ssh_port);
   db.prepare(`
-    UPDATE paymenters SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?
+    UPDATE paymenters SET name=?, host=?, ssh_port=?, ssh_user=?, ssh_password=?, db_user=?, db_password=?, db_name=?, env_path=?, install_path=?, backup_files=?
     WHERE id=?
   `).run(
     name.trim(), host.trim(), parseInt(ssh_port, 10) || 22, (ssh_user || 'root').trim(),
@@ -275,6 +285,7 @@ router.post('/paymenters/:id/update', requirePerm('manage_nodes'), (req, res) =>
     (db_user || 'paymenter').trim(),
     db_password ? encrypt(db_password) : pm.db_password,
     (db_name || 'paymenter').trim(), (env_path || '/var/www/paymenter/.env').trim(),
+    installPathFrom(req.body), req.body.backup_files === '0' ? 0 : 1,
     pm.id
   );
   logger.info(`Paymenter updated: "${name}" (by ${req.session.admin.email}).`);
@@ -564,14 +575,18 @@ router.post('/restore-paymenter', requirePerm('restore_backups'), (req, res) => 
       db_user: (req.body.db_user || 'paymenter').trim(),
       db_password: req.body.db_password,
       db_name: (req.body.db_name || 'paymenter').trim(),
+      install_path: (req.body.install_path || '/var/www/paymenter').trim(),
     };
     if (!target.host || !target.ssh_password || !target.db_password) {
       return go(res, '/backups', null, 'To restore to another VPS you need the IP, SSH password and database password.');
     }
   }
-  logger.info(`Paymenter database restore started by ${req.session.admin.email}.`);
-  backup.restorePaymenterDb(id, target).catch((e) => logger.error(e.message));
-  go(res, '/backups', 'Paymenter database restore started. Watch the progress above.');
+  // Los archivos vienen marcados por defecto; el .env NO, porque al migrar a
+  // otro VPS sus datos de conexión y su APP_URL suelen ser distintos.
+  const opts = { files: req.body.restore_files === '1', env: req.body.restore_env === '1' };
+  logger.info(`Paymenter restore started by ${req.session.admin.email} (database${opts.files ? ' + files' : ''}${opts.env ? ' + .env' : ''}).`);
+  backup.restorePaymenterDb(id, target, opts).catch((e) => logger.error(e.message));
+  go(res, '/backups', 'Paymenter restore started. Watch the progress above.');
 });
 
 // ---------------------------------------------------------------------------

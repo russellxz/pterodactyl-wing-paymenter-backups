@@ -280,6 +280,8 @@ tbody tr:last-child td { border-bottom: none; }
 .badge-db { background: var(--accent-soft); color: var(--accent-strong); border: 1px solid rgba(240, 163, 60, 0.4); }
 .badge-pay { background: rgba(78, 205, 196, 0.12); color: #6fdcd4; border: 1px solid rgba(78, 205, 196, 0.4); }
 .badge-srv { background: rgba(110, 168, 254, 0.12); color: #8fb8ff; border: 1px solid rgba(110, 168, 254, 0.35); }
+/* Copia completa de Paymenter (base de datos + archivos, extensiones y temas) */
+.badge-full { background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(70, 198, 143, 0.4); }
 .badge-ok { background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(70, 198, 143, 0.4); }
 .badge-err { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(229, 101, 110, 0.4); }
 
@@ -665,3 +667,30 @@ dialog.modal::backdrop { background: rgba(5, 8, 15, 0.7); }
   vertical-align: middle;
 }
 .bulk-table tbody tr:hover { background: var(--surface-2); }
+
+/* ----- Copia completa de Paymenter: lista de contenidos y opciones ----- */
+.feature-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.feature-list li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13.5px; line-height: 1.5; color: var(--text);
+}
+.feature-list svg { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; color: #6fdcd4; }
+.feature-list code { font-size: 12px; }
+
+/* Casilla con explicación al lado (opciones de restauración) */
+.check-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 10px 0; padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.check-row input[type="checkbox"] {
+  width: 17px; height: 17px; flex: 0 0 17px; margin-top: 2px;
+  accent-color: var(--accent); cursor: pointer;
+}
+.check-row span { line-height: 1.45; }
+
+/* Inventario resumido de cada copia (tablas, extensiones, temas) */
+.pb-inv { margin-top: 4px; line-height: 1.4; }

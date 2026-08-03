@@ -1,7 +1,7 @@
 {
   "name": "pterobackups",
-  "version": "3.9.0",
-  "description": "Web system for remote SSH backups of Pterodactyl (panel database + node server files) and Paymenter (billing database), with scheduling, restore, per-admin permissions and a panel extension.",
+  "version": "4.0.0",
+  "description": "Web system for remote SSH backups of Pterodactyl (panel database + node server files) and Paymenter (full installation: database, uploaded files, extensions and themes), with scheduling, restore, per-admin permissions and a panel extension.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

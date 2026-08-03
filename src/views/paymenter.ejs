@@ -2,7 +2,7 @@
 
 <header class="page-head">
   <h1><span class="title-pay"><i data-lucide="credit-card"></i></span>Paymenter</h1>
-  <p>Connect your <a href="https://paymenter.org/" target="_blank" rel="noopener">Paymenter</a> billing panel over SSH to back up its full database + <code>.env</code> file, on its own schedule, completely separate from Pterodactyl.</p>
+  <p>Connect your <a href="https://paymenter.org/" target="_blank" rel="noopener">Paymenter</a> billing panel over SSH to back up the <b>whole installation</b> — database, <code>.env</code>, uploaded files, extensions and themes — on its own schedule, completely separate from Pterodactyl.</p>
 </header>
 
 <section class="stats-grid stats-grid-3">
@@ -20,10 +20,23 @@
   </div>
 </section>
 
+<section class="card">
+  <h2><i data-lucide="package"></i>What gets backed up</h2>
+  <p class="muted">Everything a fresh install does <b>not</b> bring back, so you can move Paymenter to another VPS without setting it up again:</p>
+  <ul class="feature-list">
+    <li><i data-lucide="database"></i><b>The whole database</b> — every table, including the ones your extensions create. Nothing to configure: whatever exists in the database is dumped.</li>
+    <li><i data-lucide="image"></i><b>Uploaded files</b> (<code>storage/app</code>) — logo, favicon, product images, invoices and anything else uploaded from the panel.</li>
+    <li><i data-lucide="puzzle"></i><b>Installed extensions</b> (<code>extensions/</code>) — payment gateways, server modules and any other extension, with their files.</li>
+    <li><i data-lucide="palette"></i><b>Custom themes</b> (<code>themes/</code>) and the keys in <code>storage/</code> (OAuth).</li>
+    <li><i data-lucide="file-text"></i><b>The <code>.env</code> file</b> — restoring it is optional, since a new VPS needs its own database credentials.</li>
+  </ul>
+  <p class="muted small">Each backup also stores an inventory (tables, extensions, themes and version), shown next to it in <a href="/backups">Backups</a>. Restoring puts every file back in place, relinks <code>storage</code> and clears Paymenter's caches.</p>
+</section>
+
 <% if (can('run_backups') && paymenters.length) { %>
 <section class="card">
   <h2><i data-lucide="zap"></i>Manual backup</h2>
-  <p class="muted">Back up the Paymenter database right now. It appears in <a href="/backups">Backups</a>, where you can download it, restore it (to the same VPS or a new one) or delete it.</p>
+  <p class="muted">Back up Paymenter right now (database + files). It appears in <a href="/backups">Backups</a>, where you can download it, restore it (to the same VPS or a new one) or delete it.</p>
   <form method="post" action="/backups/run" class="form-inline">
     <input type="hidden" name="target" value="paymenter">
     <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Back up Paymenter now</button>
@@ -38,13 +51,21 @@
   <% if (paymenters.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Folder</th><th>Backs up</th><th>Actions</th></tr></thead>
       <tbody>
         <% paymenters.forEach(pm => { %>
         <tr>
           <td><b><%= pm.name %></b></td>
           <td><%= pm.host %>:<%= pm.ssh_port %></td>
           <td class="muted"><%= pm.db_name %> (<%= pm.db_user %>)</td>
+          <td class="muted"><code><%= pm.install_path || '/var/www/paymenter' %></code></td>
+          <td>
+            <% if (pm.backup_files) { %>
+            <span class="badge badge-full"><i data-lucide="package"></i>Database + files</span>
+            <% } else { %>
+            <span class="badge"><i data-lucide="database"></i>Database only</span>
+            <% } %>
+          </td>
           <td class="row-actions">
             <% if (can('manage_nodes')) { %>
             <button class="btn btn-sm" type="button" onclick="testConnection('/paymenters/<%= pm.id %>/test', this)" title="Test connection"><i data-lucide="plug-zap"></i></button>
@@ -74,7 +95,14 @@
     <label>Database user<input name="db_user" value="paymenter"></label>
     <label>Database password<input name="db_password" type="password" required placeholder="Database password"></label>
     <label>Database name<input name="db_name" value="paymenter"></label>
+    <label>Paymenter folder<input name="install_path" value="/var/www/paymenter"></label>
     <label>.env file path<input name="env_path" value="/var/www/paymenter/.env"></label>
+    <label>What to back up
+      <select name="backup_files">
+        <option value="1">Everything (database + files, extensions and themes)</option>
+        <option value="0">Database and .env only</option>
+      </select>
+    </label>
     <div class="form-actions">
       <button class="btn btn-primary" type="submit"><i data-lucide="plus"></i>Add Paymenter</button>
     </div>
@@ -105,7 +133,14 @@
         <label>Database user<input name="db_user" value="<%= pm.db_user %>"></label>
         <label>New database password<input name="db_password" type="password" placeholder="(saved — leave blank to keep it)"></label>
         <label>Database name<input name="db_name" value="<%= pm.db_name %>"></label>
+        <label>Paymenter folder<input name="install_path" value="<%= pm.install_path || '/var/www/paymenter' %>"></label>
         <label>.env file path<input name="env_path" value="<%= pm.env_path %>"></label>
+        <label>What to back up
+          <select name="backup_files">
+            <option value="1" <%= pm.backup_files ? 'selected' : '' %>>Everything (database + files, extensions and themes)</option>
+            <option value="0" <%= pm.backup_files ? '' : 'selected' %>>Database and .env only</option>
+          </select>
+        </label>
       </div>
       <div class="form-actions">
         <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button>

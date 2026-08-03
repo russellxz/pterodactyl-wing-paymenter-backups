@@ -4,7 +4,7 @@ Web-based remote backup system for Pterodactyl **and** Paymenter — not just th
 
 • The panel's complete database (mysqldump) + the `.env` file (essential for reinstalls).
 • The files of every server on every node (Wings), one `.zip` per server, named with the owner's first name, last name and email plus the server name, so you can find them instantly with the search box.
-• The complete Paymenter database (billing panel). This backup can be restored to a remote VPS or to the same one, exactly like the panel database.
+• **Paymenter, complete** (billing panel): the whole database, the `.env`, the files uploaded from the panel (logo, favicon, product images, invoices), the extensions you installed and your custom themes. Restore it to the same VPS or to a brand-new one without setting anything up by hand.
 
 Everything is managed from a web page with a dark design, professional icons, real-time progress and error logging.
 
@@ -14,7 +14,7 @@ Everything is managed from a web page with a dark design, professional icons, re
 • Real-time search by name, email or server.
 • Download any backup from the web.
 • Restore a specific server, all of them at once, or the panel DB (to the same VPS or a new one).
-• Restore the Paymenter DB to the same VPS or to a new one, just like the panel database.
+• Restore Paymenter whole — database + uploaded files + extensions + themes — to the same VPS or a new one, in one step.
 • Automatic deletion of old backups (configurable retention).
 • Administrators with customizable permissions.
 • Real-time progress and a live logs page.
@@ -251,6 +251,44 @@ Done. Open `https://copias.yourdomain.com` in your browser and log in with the a
 6. **Logs.** All activity and errors, in real time.
 
 Backups are saved in `storage/backups/` inside the project (servers in `servers/`, DB in `panel/`, and the `.env` backups in `panel/env/`).
+
+───
+
+## Paymenter: complete backup and migration
+
+Paymenter is a Laravel application. Reinstalling it (or cloning it on a new VPS) brings back all the code, but it does **not** bring back anything you added yourself. This system copies exactly that:
+
+| What | Where it lives | Why it matters |
+| --- | --- | --- |
+| The whole database | `mysqldump` of your database | Includes **every table**, also the ones your extensions create. Nothing to configure: whatever exists in the database is dumped. |
+| Uploaded files | `storage/app` | Logo, favicon, product images, invoices — everything uploaded from the panel. `storage/app/public` is the folder published through `storage:link`. |
+| Installed extensions | `extensions/` | Payment gateways, server modules, etc. They are in Paymenter's `.gitignore`, so an update or a reinstall does not restore them. |
+| Custom themes | `themes/` | Paymenter's `.gitignore` only keeps `default`. |
+| OAuth keys | `storage/*.key` | Also gitignored. |
+| The `.env` file | wherever you configured it | Restoring it is **optional** — see below. |
+
+Not included (on purpose, because it regenerates itself and only makes the `.zip` heavier): `vendor/`, `node_modules/`, `storage/framework` (caches), logs and Livewire's half-finished uploads.
+
+### Setting it up
+
+On the **Paymenter** page, each installation has two extra fields:
+
+- **Paymenter folder** — where it is installed, normally `/var/www/paymenter`. If you leave it blank it is worked out from the `.env` path.
+- **What to back up** — *Everything* (the default) or *Database and `.env` only*, if you would rather keep the `.zip` small.
+
+Nothing else to do: every backup, manual or scheduled, saves the whole installation. Each one also stores an inventory (tables, extensions, themes and Paymenter version) that you can see next to it in **Backups**.
+
+### Migrating to another VPS
+
+1. Install Paymenter on the new VPS the usual way and create its (empty) database.
+2. In **Backups → Paymenter database backups**, open the day and press restore on the backup you want.
+3. Choose **Another VPS (new Paymenter)** and fill in its IP, SSH password, database details and the Paymenter folder.
+4. Leave **Uploaded files, extensions and themes** ticked.
+5. Leave **Replace the `.env` file** unticked: the new VPS has its own database credentials and its own `APP_URL`, and replacing them would break it. Tick it only when you are restoring onto the **same** VPS (the current `.env` is saved next to it with a `.pb-backup-` suffix before being replaced).
+
+The system imports the database, puts every file back in its place (merging, so nothing already on the destination is deleted), recreates the `storage` public link and clears Paymenter's caches. Ownership of the folder is handed back to the web user afterwards.
+
+> Backups made before this feature existed only contain the database and the `.env`. They are still valid and still restore fine — they are marked *Database only*, and asking for files simply warns you there are none inside.
 
 ───
 

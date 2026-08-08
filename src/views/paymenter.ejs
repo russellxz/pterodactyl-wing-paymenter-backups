@@ -2,7 +2,7 @@
 
 <header class="page-head">
   <h1><span class="title-pay"><i data-lucide="credit-card"></i></span>Paymenter</h1>
-  <p>Connect your <a href="https://paymenter.org/" target="_blank" rel="noopener">Paymenter</a> billing panel over SSH to back up the <b>whole installation</b> — database, <code>.env</code>, uploaded files, extensions and themes — on its own schedule, completely separate from Pterodactyl.</p>
+  <p>Connect your <a href="https://paymenter.org/" target="_blank" rel="noopener">Paymenter</a> billing panel over SSH to back up its database and the files uploaded from the panel (logo, images), each on its own schedule, completely separate from Pterodactyl.</p>
 </header>
 
 <section class="stats-grid stats-grid-3">
@@ -21,26 +21,29 @@
 </section>
 
 <section class="card">
-  <h2><i data-lucide="package"></i>What gets backed up</h2>
-  <p class="muted">Everything a fresh install does <b>not</b> bring back, so you can move Paymenter to another VPS without setting it up again:</p>
+  <h2><i data-lucide="package"></i>The two kinds of backup</h2>
+  <p class="muted">Each one has its own timer, its own countdown and its own folder, so the light one can run often and the heavy one every few days:</p>
   <ul class="feature-list">
-    <li><i data-lucide="database"></i><b>The whole database</b> — every table, including the ones your extensions create. Nothing to configure: whatever exists in the database is dumped.</li>
-    <li><i data-lucide="image"></i><b>Uploaded files</b> (<code>storage/app</code>) — logo, favicon, product images, invoices and anything else uploaded from the panel.</li>
-    <li><i data-lucide="puzzle"></i><b>Installed extensions</b> (<code>extensions/</code>) — payment gateways, server modules and any other extension, with their files.</li>
-    <li><i data-lucide="palette"></i><b>Custom themes</b> (<code>themes/</code>) and the keys in <code>storage/</code> (OAuth).</li>
-    <li><i data-lucide="file-text"></i><b>The <code>.env</code> file</b> — restoring it is optional, since a new VPS needs its own database credentials.</li>
+    <li><i data-lucide="database"></i><b>Database only</b> — <code>mysqldump</code> of the whole database + the <code>.env</code>. Small and quick. Saved in <code>storage/backups/paymenter/</code>.</li>
+    <li><i data-lucide="image"></i><b>Database + uploaded files</b> — the same, plus <code>storage/app</code>: the <b>logo, the favicon, the product images</b> and the invoices. This is the one that saves you from re-uploading everything by hand when you migrate. Saved in <code>storage/backups/paymenter_files/</code>.</li>
   </ul>
-  <p class="muted small">Each backup also stores an inventory (tables, extensions, themes and version), shown next to it in <a href="/backups">Backups</a>. Restoring puts every file back in place, relinks <code>storage</code> and clears Paymenter's caches.</p>
+  <p class="muted small"><b>The tables your extensions create are always included</b>, in both kinds: the dump carries every table in the database, so there is nothing to configure. What is <b>not</b> copied is the extensions' own code and the themes — those you reinstall on the destination VPS, and each backup notes which ones were installed so you know what to put back.</p>
 </section>
 
 <% if (can('run_backups') && paymenters.length) { %>
 <section class="card">
   <h2><i data-lucide="zap"></i>Manual backup</h2>
-  <p class="muted">Back up Paymenter right now (database + files). It appears in <a href="/backups">Backups</a>, where you can download it, restore it (to the same VPS or a new one) or delete it.</p>
-  <form method="post" action="/backups/run" class="form-inline">
-    <input type="hidden" name="target" value="paymenter">
-    <button class="btn btn-primary" type="submit"><i data-lucide="play"></i>Back up Paymenter now</button>
-  </form>
+  <p class="muted">Back up right now. It appears in <a href="/backups">Backups</a>, where you can download it, restore it (to the same VPS or a new one) or delete it.</p>
+  <div class="form-inline">
+    <form method="post" action="/backups/run" class="inline">
+      <input type="hidden" name="target" value="paymenter">
+      <button class="btn" type="submit"><i data-lucide="database"></i>Back up database now</button>
+    </form>
+    <form method="post" action="/backups/run" class="inline">
+      <input type="hidden" name="target" value="paymenter_files">
+      <button class="btn btn-primary" type="submit"><i data-lucide="image"></i>Back up database + files now</button>
+    </form>
+  </div>
 </section>
 <% } %>
 
@@ -51,7 +54,7 @@
   <% if (paymenters.length) { %>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Folder</th><th>Backs up</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>IP</th><th>Database</th><th>Folder</th><th>File backups</th><th>Actions</th></tr></thead>
       <tbody>
         <% paymenters.forEach(pm => { %>
         <tr>
@@ -61,7 +64,7 @@
           <td class="muted"><code><%= pm.install_path || '/var/www/paymenter' %></code></td>
           <td>
             <% if (pm.backup_files) { %>
-            <span class="badge badge-full"><i data-lucide="package"></i>Database + files</span>
+            <span class="badge badge-full"><i data-lucide="image"></i>Files included</span>
             <% } else { %>
             <span class="badge"><i data-lucide="database"></i>Database only</span>
             <% } %>
@@ -97,10 +100,10 @@
     <label>Database name<input name="db_name" value="paymenter"></label>
     <label>Paymenter folder<input name="install_path" value="/var/www/paymenter"></label>
     <label>.env file path<input name="env_path" value="/var/www/paymenter/.env"></label>
-    <label>What to back up
+    <label>Include in the "database + files" backup
       <select name="backup_files">
-        <option value="1">Everything (database + files, extensions and themes)</option>
-        <option value="0">Database and .env only</option>
+        <option value="1">Yes — also copy its uploaded files (logo, images)</option>
+        <option value="0">No — only ever back up its database</option>
       </select>
     </label>
     <div class="form-actions">
@@ -113,9 +116,10 @@
 <section class="card">
   <h2><i data-lucide="calendar-clock"></i>Automatic backups</h2>
   <div class="kv">
-    <div><span class="muted">Paymenter schedule:</span> <b><%= pmStats.scheduleHours == 0 ? 'Disabled' : (pmStats.scheduleHours == 1 ? 'Every hour' : 'Every ' + (pmStats.scheduleHours / 24) + ' day(s)') %></b></div>
+    <div><span class="muted">Database only:</span> <b><%= pmStats.scheduleHours == 0 ? 'Disabled' : (pmStats.scheduleHours == 1 ? 'Every hour' : 'Every ' + (pmStats.scheduleHours / 24) + ' day(s)') %></b></div>
+    <div><span class="muted">Database + uploaded files:</span> <b><%= pmStats.scheduleHoursFiles == 0 ? 'Disabled' : (pmStats.scheduleHoursFiles == 1 ? 'Every hour' : 'Every ' + (pmStats.scheduleHoursFiles / 24) + ' day(s)') %></b></div>
   </div>
-  <p class="muted small">Paymenter has its own timer, separate from the nodes and the panel database, so backups never run on the same day or at the same time. <% if (can('manage_settings')) { %>Change it in <a href="/settings">Settings</a>.<% } %> When enabled, its live countdown appears at the top of every page.</p>
+  <p class="muted small">Each one has its own timer, separate from the nodes and the panel database, so backups never run on the same day or at the same time. <% if (can('manage_settings')) { %>Change them in <a href="/settings">Settings</a>.<% } %> When enabled, each shows its own live countdown at the top of every page.</p>
 </section>
 
 <% if (can('manage_nodes')) { %>
@@ -135,10 +139,10 @@
         <label>Database name<input name="db_name" value="<%= pm.db_name %>"></label>
         <label>Paymenter folder<input name="install_path" value="<%= pm.install_path || '/var/www/paymenter' %>"></label>
         <label>.env file path<input name="env_path" value="<%= pm.env_path %>"></label>
-        <label>What to back up
+        <label>Include in the "database + files" backup
           <select name="backup_files">
-            <option value="1" <%= pm.backup_files ? 'selected' : '' %>>Everything (database + files, extensions and themes)</option>
-            <option value="0" <%= pm.backup_files ? '' : 'selected' %>>Database and .env only</option>
+            <option value="1" <%= pm.backup_files ? 'selected' : '' %>>Yes — also copy its uploaded files (logo, images)</option>
+            <option value="0" <%= pm.backup_files ? '' : 'selected' %>>No — only ever back up its database</option>
           </select>
         </label>
       </div>

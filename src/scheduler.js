@@ -15,15 +15,22 @@ const KINDS = {
   nodes: { scheduleKey: 'schedule_hours_nodes', lastKey: 'last_auto_run_nodes', target: 'nodes', label: 'the nodes' },
   panel: { scheduleKey: 'schedule_hours_panel', lastKey: 'last_auto_run_panel', target: 'panel', label: 'the panel database' },
   paymenter: { scheduleKey: 'schedule_hours_paymenter', lastKey: 'last_auto_run_paymenter', target: 'paymenter', label: 'the Paymenter database' },
+  // Las imágenes subidas a Paymenter tienen su propio temporizador: pesan más
+  // que la base de datos, así que lo normal es espaciarlas más.
+  paymenter_files: { scheduleKey: 'schedule_hours_paymenter_files', lastKey: 'last_auto_run_paymenter_files', target: 'paymenter_files', label: "Paymenter's database and uploaded files" },
 };
+
+// Las clases nuevas (Paymenter) empiezan desactivadas: no heredan el ajuste
+// único antiguo, que solo existía para nodos y panel.
+const NEW_KINDS = ['paymenter', 'paymenter_files'];
 
 function intervalFor(kind) {
   const k = KINDS[kind];
   let hours = getSetting(k.scheduleKey, null);
   if (hours === null) {
     // Migración desde el ajuste único anterior (solo nodos y panel;
-    // Paymenter es nuevo y empieza desactivado).
-    hours = kind === 'paymenter' ? '0' : getSetting('schedule_hours', '0');
+    // los de Paymenter son nuevos y empiezan desactivados).
+    hours = NEW_KINDS.includes(kind) ? '0' : getSetting('schedule_hours', '0');
     setSetting(k.scheduleKey, hours);
   }
   return parseInt(hours, 10) || 0;
@@ -33,7 +40,7 @@ function lastRunFor(kind) {
   const k = KINDS[kind];
   let last = getSetting(k.lastKey, null);
   if (last === null) {
-    last = kind === 'paymenter' ? String(Date.now()) : getSetting('last_auto_run', String(Date.now()));
+    last = NEW_KINDS.includes(kind) ? String(Date.now()) : getSetting('last_auto_run', String(Date.now()));
     setSetting(k.lastKey, last);
   }
   return parseInt(last, 10) || 0;
@@ -70,6 +77,7 @@ async function tick() {
   await runKind('nodes');
   await runKind('panel');
   await runKind('paymenter');
+  await runKind('paymenter_files');
 }
 
 function start() {
@@ -77,4 +85,5 @@ function start() {
   setTimeout(tick, 15 * 1000);
 }
 
-module.exports = { start };
+// _tick se exporta solo para las pruebas automáticas.
+module.exports = { start, _tick: tick };

@@ -17,39 +17,36 @@ const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, '..', 'storage
 const SERVER_DIR = path.join(BACKUP_DIR, 'servers');
 const PANEL_DIR = path.join(BACKUP_DIR, 'panel');
 const ENV_DIR = path.join(PANEL_DIR, 'env'); // copias sueltas del archivo .env de cada panel
-const PAYMENTER_DIR = path.join(BACKUP_DIR, 'paymenter');
+// Las dos clases de copia de Paymenter van en carpetas DISTINTAS para no
+// mezclarlas: la ligera (solo base de datos) se hace a menudo, y la que además
+// lleva las imágenes subidas es más pesada y suele hacerse cada varios días.
+const PAYMENTER_DIR = path.join(BACKUP_DIR, 'paymenter');            // BD + .env
+const PAYMENTER_FILES_DIR = path.join(BACKUP_DIR, 'paymenter_files'); // BD + .env + imágenes
 const PAYMENTER_ENV_DIR = path.join(PAYMENTER_DIR, 'env'); // copias sueltas del .env de Paymenter
-[SERVER_DIR, PANEL_DIR, ENV_DIR, PAYMENTER_DIR, PAYMENTER_ENV_DIR].forEach((d) => fs.mkdirSync(d, { recursive: true }));
+[SERVER_DIR, PANEL_DIR, ENV_DIR, PAYMENTER_DIR, PAYMENTER_FILES_DIR, PAYMENTER_ENV_DIR]
+  .forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
 const VOLUMES_PATH = '/var/lib/pterodactyl/volumes';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
-// Paymenter: qué se copia además de la base de datos
+// Paymenter: qué se copia
 // ---------------------------------------------------------------------------
-// Paymenter es una aplicación Laravel. Al reinstalarla (o al clonarla en un
-// VPS nuevo) vuelve todo el código, pero NO vuelve nada de esto:
+// Hay DOS clases de copia, cada una con su propio horario y su propia carpeta:
 //
-//   storage/app  -> archivos subidos desde el panel: logo, favicon, imágenes
-//                   de productos, facturas... (el "disco public" de Laravel
-//                   es storage/app/public, que se publica con storage:link)
-//   extensions   -> las extensiones instaladas (pasarelas de pago, módulos
-//                   de servidores, etc.). Son carpetas extensions/<Tipo>/<Nombre>
-//                   y están en el .gitignore de Paymenter: si no se copian,
-//                   se pierden al migrar.
-//   themes       -> los temas propios (el .gitignore solo conserva "default")
+//   1) Solo base de datos  -> mysqldump + .env. Ligera, para hacerla a menudo.
+//   2) Base de datos + archivos subidos -> lo anterior MÁS storage/app, que es
+//      donde Paymenter guarda todo lo que se sube desde el panel: el logo, el
+//      favicon, las imágenes de los productos y las facturas. Es lo más pesado
+//      de rehacer a mano al migrar, así que conviene tenerlo copiado.
 //
-// Las TABLAS que crean esas extensiones no hay que detectarlas a mano: el
-// mysqldump de la base de datos vuelca todas las tablas que existan, sean de
-// Paymenter o de una extensión. Aun así las inventariamos para dejar
-// constancia en el manifiesto de la copia.
-const PAYMENTER_DATA_DIRS = ['storage/app', 'extensions', 'themes'];
+// En los dos casos el mysqldump vuelca la base de datos ENTERA, así que las
+// tablas que crean las extensiones entran solas: no hay nada que configurar.
+// El código de las extensiones y los temas NO se copian (se reinstalan en el
+// VPS nuevo); en el inventario de cada copia se deja anotado cuáles había.
+const PAYMENTER_DATA_DIRS = ['storage/app'];
 
-// Claves sueltas de storage/ (APP_KEY va en el .env, pero Passport/OAuth
-// guarda sus claves como storage/oauth-*.key y también están en el .gitignore).
-const PAYMENTER_KEY_GLOB = 'storage/*.key';
-
-// Lo que nunca entra aunque esté dentro de esas carpetas.
+// Lo que nunca entra aunque esté dentro de esa carpeta.
 const PAYMENTER_EXCLUDES = [
   '-x "*/node_modules/*"', '-x "*/vendor/*"',
   '-x "*.log"', '-x "*/.git/*"',
@@ -145,6 +142,9 @@ function getPaymenter(id) {
 
 function backupFilePath(b) {
   if (b.type === 'panel_db') return path.join(PANEL_DIR, b.filename);
+  if (b.type === 'paymenter_files') return path.join(PAYMENTER_FILES_DIR, b.filename);
+  // Ojo: las copias hechas antes de separar las carpetas siguen en 'paymenter/'
+  // aunque llevaran archivos dentro, así que el tipo manda sobre has_files.
   if (b.type === 'paymenter_db') return path.join(PAYMENTER_DIR, b.filename);
   return path.join(SERVER_DIR, b.filename);
 }
@@ -291,9 +291,8 @@ async function paymenterInventory(conn, pm, install, dbPass) {
     install_path: install,
     db_name: pm.db_name,
     tables: [],
-    extensions: [],
-    themes: [],
-    keys: [],
+    extensions: [], // solo informativo: su código no se copia, sus tablas sí
+    themes: [],     // solo informativo
     dirs: {},
     generated_at: new Date().toISOString(),
   };
@@ -311,8 +310,10 @@ async function paymenterInventory(conn, pm, install, dbPass) {
     logger.warn(`Paymenter "${pm.name}": could not list the database tables (${e.message}).`);
   }
 
-  // 2) Extensiones, temas, claves y tamaños. Todo en un solo comando para no
-  //    abrir cinco canales SSH por copia.
+  // 2) Extensiones, temas y tamaños. Todo en un solo comando para no abrir
+  //    cinco canales SSH por copia. Las extensiones y los temas se anotan
+  //    solo como información: su código no se copia (sus TABLAS sí, porque
+  //    van dentro del volcado de la base de datos).
   try {
     const out = await exec(conn, `cd ${sq(install)} 2>/dev/null || exit 0
 echo "@@version"
@@ -321,8 +322,6 @@ echo "@@extensions"
 ls -d extensions/*/*/ 2>/dev/null | sed 's:/*$::'
 echo "@@themes"
 ls -d themes/*/ 2>/dev/null | sed 's:/*$::'
-echo "@@keys"
-ls ${PAYMENTER_KEY_GLOB} 2>/dev/null
 echo "@@sizes"
 du -sk ${PAYMENTER_DATA_DIRS.join(' ')} 2>/dev/null
 echo "@@end"`);
@@ -335,7 +334,6 @@ echo "@@end"`);
       if (section === 'version') inv.version = line;
       else if (section === 'extensions') inv.extensions.push(line.replace(/^extensions\//, ''));
       else if (section === 'themes') inv.themes.push(line.replace(/^themes\//, ''));
-      else if (section === 'keys') inv.keys.push(line.replace(/^storage\//, ''));
       else if (section === 'sizes') {
         const [kb, dir] = line.split(/\s+/);
         if (dir) inv.dirs[dir] = Math.round((parseInt(kb, 10) || 0) / 1024); // MB
@@ -349,25 +347,25 @@ echo "@@end"`);
 }
 
 // ---------------------------------------------------------------------------
-// Copia COMPLETA de UN Paymenter:
-//   - base de datos entera (mysqldump, incluye las tablas de las extensiones)
-//   - archivo .env
-//   - archivos subidos (storage/app: logo, imágenes...), extensiones y temas
-//   - manifest.json con el inventario de todo lo anterior
+// Copia de UN Paymenter. Dos modos, cada uno a su carpeta:
+//   withFiles = false -> base de datos + .env            (carpeta paymenter/)
+//   withFiles = true  -> lo anterior + los archivos subidos, es decir el logo,
+//                        el favicon y las imágenes de los productos
+//                                                  (carpeta paymenter_files/)
+// En los dos casos el volcado incluye las tablas que crean las extensiones.
 // El .zip queda con esta forma, para que restaurarlo sea descomprimir encima:
-//   database.sql · paymenter.env · manifest.json · storage/… · extensions/… · themes/…
+//   database.sql · paymenter.env · manifest.json · storage/app/…
 // ---------------------------------------------------------------------------
-async function backupPaymenter(pm) {
-  const withFiles = pm.backup_files === undefined ? true : !!pm.backup_files;
+async function backupPaymenter(pm, withFiles = false) {
   const install = paymenterInstallPath(pm);
-  setJob({ message: `Backing up Paymenter "${pm.name}"${withFiles ? ' (database + files)' : ' (database only)'}...` });
+  setJob({ message: `Backing up Paymenter "${pm.name}"${withFiles ? ' (database + uploaded files)' : ' (database only)'}...` });
 
   const base = `pb_paymenter_${Date.now()}`;
   const stage = `/tmp/${base}`;          // aquí se preparan database.sql, .env y manifest.json
   const remoteZip = `/tmp/${base}.zip`;
   const dbPass = decrypt(pm.db_password);
-  const localName = `paymenter_${withFiles ? 'full' : 'db'}__${sanitize(pm.name)}__${stamp()}.zip`;
-  const localPath = path.join(PAYMENTER_DIR, localName);
+  const localName = `paymenter_${withFiles ? 'files' : 'db'}__${sanitize(pm.name)}__${stamp()}.zip`;
+  const localPath = path.join(withFiles ? PAYMENTER_FILES_DIR : PAYMENTER_DIR, localName);
 
   await withConn(panelSsh(pm), async (conn) => {
     try {
@@ -390,7 +388,7 @@ async function backupPaymenter(pm) {
       if (!hasEnv) logger.warn(`Paymenter "${pm.name}": .env file not found at ${pm.env_path}.`);
 
       // 3) Inventario (tablas, extensiones, temas...).
-      setJob({ message: `Paymenter "${pm.name}": inspecting extensions and themes...` });
+      setJob({ message: `Paymenter "${pm.name}": taking inventory of the installation...` });
       const inv = await paymenterInventory(conn, pm, install, dbPass);
       inv.has_files = withFiles;
       const invJson = JSON.stringify(inv, null, 2);
@@ -407,17 +405,17 @@ async function backupPaymenter(pm) {
 
       // 5) Archivos de la instalación, conservando su ruta relativa.
       if (withFiles) {
-        setJob({ message: `Paymenter "${pm.name}": adding uploaded files, extensions and themes...` });
+        setJob({ message: `Paymenter "${pm.name}": adding the uploaded files (logo, images...)...` });
         // El "exit 0" del final es importante: el código de salida del bucle es
-        // el de su última vuelta, así que sin él una instalación sin carpeta
-        // "themes" haría fallar la copia entera.
+        // el de su última vuelta, así que sin él una instalación a la que le
+        // falte una de las carpetas haría fallar la copia entera.
         const present = (await exec(
           conn,
           `cd ${sq(install)} 2>/dev/null || exit 0; for d in ${PAYMENTER_DATA_DIRS.join(' ')}; do [ -d "$d" ] && echo "$d"; done; exit 0`
         )).split('\n').map((s) => s.trim()).filter(Boolean);
 
         if (!present.length) {
-          logger.warn(`Paymenter "${pm.name}": no data folders found in ${install}. Only the database and the .env were saved. Check the installation path.`);
+          logger.warn(`Paymenter "${pm.name}": no uploaded files found in ${install} (${PAYMENTER_DATA_DIRS.join(', ')}). Only the database and the .env were saved. Check the installation path.`);
         } else {
           // zip devuelve 12 ("nothing to do") si una carpeta está vacía: no es
           // un error, así que solo abortamos con otros códigos.
@@ -426,11 +424,6 @@ async function backupPaymenter(pm) {
             `cd ${sq(install)} && zip -ryqX ${sq(remoteZip)} ${present.map(sq).join(' ')} ${PAYMENTER_EXCLUDES}; ` +
             `rc=$?; [ $rc -eq 0 ] || [ $rc -eq 12 ] || exit $rc`
           );
-          // Claves de storage/ (oauth-*.key). Van aparte porque son un patrón.
-          await exec(
-            conn,
-            `cd ${sq(install)} && if ls ${PAYMENTER_KEY_GLOB} >/dev/null 2>&1; then zip -yqX ${sq(remoteZip)} ${PAYMENTER_KEY_GLOB}; fi`
-          ).catch(() => {});
         }
       }
 
@@ -443,11 +436,14 @@ async function backupPaymenter(pm) {
       const size = fs.statSync(localPath).size;
       db.prepare(`
         INSERT INTO backups (type, paymenter_id, server_name, owner_name, owner_email, filename, size, has_files, manifest)
-        VALUES ('paymenter_db', ?, ?, '—', '—', ?, ?, ?, ?)
-      `).run(pm.id, `Paymenter: ${pm.name}`, localName, size, withFiles ? 1 : 0, invJson);
+        VALUES (?, ?, ?, '—', '—', ?, ?, ?, ?)
+      `).run(
+        withFiles ? 'paymenter_files' : 'paymenter_db',
+        pm.id, `Paymenter: ${pm.name}`, localName, size, withFiles ? 1 : 0, invJson
+      );
 
       const extra = withFiles
-        ? ` — ${inv.tables.length} tables, ${inv.extensions.length} extensions, ${inv.themes.length} themes`
+        ? ` — ${inv.tables.length} tables + uploaded files (${inv.dirs['storage/app'] || 0} MB)`
         : ` — ${inv.tables.length} tables (database only)`;
       logger.info(`Paymenter backup for "${pm.name}" created (${localName})${extra}.`);
     } finally {
@@ -483,20 +479,45 @@ async function runBackup(opts = {}) {
       }
     }
 
-    // 1b) Bases de datos de Paymenter (cada una por separado). No interfiere
-    //     con la lógica del panel ni de los nodos: es un bloque aparte.
-    if (target === 'paymenter' || target === 'all') {
-      const paymenters = opts.paymenterId ? [getPaymenter(opts.paymenterId)].filter(Boolean) : getPaymenters();
-      if (!paymenters.length) logger.warn('No Paymenter installations configured to back up their database.');
+    // 1b) Paymenter. Dos clases de copia con su propio objetivo y su propia
+    //     carpeta: 'paymenter' (solo base de datos) y 'paymenter_files'
+    //     (base de datos + los archivos subidos). No interfiere con la lógica
+    //     del panel ni de los nodos: es un bloque aparte.
+    if (target === 'paymenter' || target === 'paymenter_files' || target === 'all') {
+      const withFiles = target === 'paymenter_files';
+      let paymenters = opts.paymenterId ? [getPaymenter(opts.paymenterId)].filter(Boolean) : getPaymenters();
+      // El interruptor de cada instalación solo afecta a la copia con archivos:
+      // la de la base de datos siempre se hace.
+      if (withFiles) paymenters = paymenters.filter((pm) => pm.backup_files === undefined || pm.backup_files);
+      if (!paymenters.length) {
+        logger.warn(withFiles
+          ? 'No Paymenter installations set to back up their uploaded files.'
+          : 'No Paymenter installations configured to back up their database.');
+      }
       setJob({ total: job.total + paymenters.length });
       for (const pm of paymenters) {
         if (job.cancelRequested) break;
         try {
-          await backupPaymenter(pm);
+          await backupPaymenter(pm, withFiles);
         } catch (e) {
           logger.error(`Error backing up Paymenter "${pm.name}": ${e.message}`);
         }
         setJob({ current: job.current + 1 });
+      }
+      // 'all' hace las dos: la ligera arriba y la de archivos aquí.
+      if (target === 'all') {
+        const withMedia = (opts.paymenterId ? [getPaymenter(opts.paymenterId)].filter(Boolean) : getPaymenters())
+          .filter((pm) => pm.backup_files === undefined || pm.backup_files);
+        setJob({ total: job.total + withMedia.length });
+        for (const pm of withMedia) {
+          if (job.cancelRequested) break;
+          try {
+            await backupPaymenter(pm, true);
+          } catch (e) {
+            logger.error(`Error backing up the files of Paymenter "${pm.name}": ${e.message}`);
+          }
+          setJob({ current: job.current + 1 });
+        }
       }
     }
 
@@ -663,14 +684,14 @@ async function restorePanelDb(backupId, target = null) {
 
 // ---------------------------------------------------------------------------
 // Restaurar un Paymenter (al mismo VPS o a otro nuevo).
-// opts.files -> además de la base de datos, devuelve los archivos subidos,
-//               las extensiones y los temas que trae el .zip.
+// opts.files -> además de la base de datos, devuelve los archivos subidos
+//               (logo, favicon, imágenes de productos) que trae el .zip.
 // opts.env   -> sobrescribe también el archivo .env del destino. Al migrar a
 //               otro VPS normalmente NO interesa (sus datos de base de datos
 //               y su APP_URL son distintos), por eso va desactivado por defecto.
 // ---------------------------------------------------------------------------
 async function restorePaymenterDb(backupId, target = null, opts = {}) {
-  const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type = 'paymenter_db'").get(backupId);
+  const b = db.prepare("SELECT * FROM backups WHERE id = ? AND type IN ('paymenter_db', 'paymenter_files')").get(backupId);
   if (!b) throw new Error('That Paymenter backup does not exist.');
   const localPath = backupFilePath(b);
   if (!fs.existsSync(localPath)) throw new Error('The .zip file no longer exists on disk.');
@@ -730,7 +751,7 @@ async function restorePaymenterDb(backupId, target = null, opts = {}) {
           )).split('\n').map((s) => s.trim()).filter(Boolean);
 
           if (!present.length) {
-            logger.warn('This backup only contains the database and the .env (it was made before full backups, or with files disabled). Nothing to restore in files.');
+            logger.warn('This backup only contains the database and the .env, so there are no uploaded files inside it. To also bring back the logo and the images, restore one from "Paymenter files backups".');
           } else {
             setJob({ message: `Restoring files on ${label}...` });
             const exists = (await exec(conn, `if [ -d ${sq(install)} ]; then echo OK; else echo NO; fi`)).trim() === 'OK';
@@ -782,8 +803,8 @@ async function restorePaymenterDb(backupId, target = null, opts = {}) {
     logger.info(
       `Paymenter restored on ${label} (${done.join(', ')}). ` +
       (wantFiles
-        ? 'Uploaded files, extensions and themes are back in place. If something looks off, run "php artisan optimize:clear" on that VPS.'
-        : 'Only the database was restored. To also bring back logos, images, extensions and themes, restore again with the "files" option enabled.') +
+        ? 'The uploaded files (logo, favicon, product images) are back in place. Remember that the extensions themselves have to be reinstalled on that VPS — their database tables are already restored.'
+        : 'Only the database was restored. To also bring back the logo and the images, restore a backup from "Paymenter files backups" with the files option enabled.') +
       (wantEnv ? ' The .env was replaced (the previous one was saved next to it with a .pb-backup- suffix).' : '')
     );
   } finally {

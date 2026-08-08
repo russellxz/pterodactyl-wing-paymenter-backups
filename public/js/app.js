@@ -51,6 +51,7 @@
   var nextRunNodes = null;
   var nextRunPanel = null;
   var nextRunPaymenter = null;
+  var nextRunPaymenterFiles = null;
   var nextRunCleanup = null;
   var serverOffset = 0; // diferencia entre el reloj del servidor y el del navegador
 
@@ -71,6 +72,7 @@
       { at: nextRunNodes, chip: el('auto-nodes'), num: el('auto-countdown-nodes') },
       { at: nextRunPanel, chip: el('auto-panel'), num: el('auto-countdown-panel') },
       { at: nextRunPaymenter, chip: el('auto-paymenter'), num: el('auto-countdown-paymenter') },
+      { at: nextRunPaymenterFiles, chip: el('auto-paymenter-files'), num: el('auto-countdown-paymenter-files') },
       { at: nextRunCleanup, chip: el('auto-cleanup'), num: el('auto-countdown-cleanup') }
     ];
     var any = false;
@@ -97,6 +99,7 @@
     nextRunNodes = data.next_run_nodes || null;
     nextRunPanel = data.next_run_panel || null;
     nextRunPaymenter = data.next_run_paymenter || null;
+    nextRunPaymenterFiles = data.next_run_paymenter_files || null;
     nextRunCleanup = data.next_run_cleanup || null;
     if (data.server_now) serverOffset = data.server_now - Date.now();
     updateCountdown();

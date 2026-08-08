@@ -89,7 +89,29 @@
     <% }) %>
   </div>
   <% } else { %>
-  <p class="empty"><i data-lucide="inbox"></i>No Paymenter backups yet.<% if (!paymenters.length) { %>&nbsp;Add your Paymenter in <a href="/paymenter">Paymenter</a> and use "Back up now" choosing "Paymenter database only".<% } %></p>
+  <p class="empty"><i data-lucide="inbox"></i>No Paymenter database backups yet.<% if (!paymenters.length) { %>&nbsp;Add your Paymenter in <a href="/paymenter">Paymenter</a> first.<% } %></p>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2><i data-lucide="image"></i>Paymenter database + files backups</h2>
+  <p class="muted small">These carry the same database <b>plus the files uploaded from the panel</b>: the logo, the favicon and the product images. They live in their own folder (<code>storage/backups/paymenter_files/</code>) and have their own timer, so restoring one saves you from re-uploading every image by hand.</p>
+  <% if (paymenterFilesDays.length) { %>
+  <div class="node-grid">
+    <% paymenterFilesDays.forEach(d => { %>
+    <a class="node-card" href="/db-backups/paymenter_files/<%= d.day %>">
+      <div class="node-card-head"><i data-lucide="image"></i><span><%= d.day %></span></div>
+      <div class="node-card-stats">
+        <div><span class="muted small">Backups</span><b><%= d.cnt %></b></div>
+        <div><span class="muted small">Disk</span><b><%= fmtSize(d.total_size) %></b></div>
+      </div>
+      <div class="muted small">Last: <b><%= d.last_at %></b></div>
+      <span class="node-card-link">View backups <i data-lucide="arrow-right"></i></span>
+    </a>
+    <% }) %>
+  </div>
+  <% } else { %>
+  <p class="empty"><i data-lucide="inbox"></i>No Paymenter file backups yet.<% if (paymenters.length) { %>&nbsp;Use "Back up database + files now" in <a href="/paymenter">Paymenter</a>, or schedule it in <a href="/settings">Settings</a>.<% } %></p>
   <% } %>
 </section>
 

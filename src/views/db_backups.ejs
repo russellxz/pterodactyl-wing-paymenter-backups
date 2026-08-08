@@ -1,10 +1,16 @@
 <%- include('partials/head') %>
 
-<% const isPay = kind === 'paymenter'; %>
+<%
+  // Tres listados posibles: base de datos del panel, base de datos de Paymenter
+  // y base de datos + archivos subidos de Paymenter.
+  const isFiles = kind === 'paymenter_files';
+  const isPay = kind === 'paymenter' || isFiles;
+  const payLabel = isFiles ? 'Paymenter database + files' : 'Paymenter database';
+%>
 
 <header class="page-head">
-  <h1><%= isPay ? 'Paymenter' : 'Panel' %> database backups: <%= day %></h1>
-  <p>Every <%= isPay ? 'Paymenter' : 'panel' %> database backup taken on this day. You can download, restore or delete each one. <%= isPay ? 'These backups never touch the panel or the nodes.' : 'Restoring a database never touches the nodes.' %></p>
+  <h1><%= isPay ? payLabel : 'Panel database' %> backups: <%= day %></h1>
+  <p>Every <%= isPay ? payLabel.toLowerCase() : 'panel database' %> backup taken on this day. You can download, restore or delete each one. <%= isPay ? 'These backups never touch the panel or the nodes.' : 'Restoring a database never touches the nodes.' %><%= isFiles ? ' Each one also carries the logo, the favicon and the product images uploaded from the panel.' : '' %></p>
 </header>
 
 <div class="toolbar">
@@ -12,7 +18,7 @@
 </div>
 
 <section class="card">
-  <h2><i data-lucide="<%= isPay ? 'credit-card' : 'database' %>"></i>Backups on <%= day %></h2>
+  <h2><i data-lucide="<%= isFiles ? 'image' : (isPay ? 'credit-card' : 'database') %>"></i>Backups on <%= day %></h2>
   <% if (backups.length) { %>
   <form method="post" action="/backups/delete-many" class="bulk-form" data-confirm="Delete the selected database backups? This cannot be undone.">
     <% if (can('delete_backups')) { %>
@@ -34,7 +40,7 @@
           <% backups.forEach(b => { %>
           <tr>
             <% if (can('delete_backups')) { %><td class="col-check"><input type="checkbox" class="bulk-item" name="ids" value="<%= b.id %>"></td><% } %>
-            <td><span class="badge <%= isPay ? 'badge-pay' : 'badge-db' %>"><i data-lucide="<%= isPay ? 'credit-card' : 'database' %>"></i><%= b.owner_label || (isPay ? 'Deleted Paymenter' : 'Deleted panel') %></span></td>
+            <td><span class="badge <%= isPay ? 'badge-pay' : 'badge-db' %>"><i data-lucide="<%= isFiles ? 'image' : (isPay ? 'credit-card' : 'database') %>"></i><%= b.owner_label || (isPay ? 'Deleted Paymenter' : 'Deleted panel') %></span></td>
             <% if (isPay) { %>
             <%
               let inv = null;
@@ -42,15 +48,15 @@
             %>
             <td>
               <% if (b.has_files) { %>
-              <span class="badge badge-full"><i data-lucide="package"></i>Full</span>
+              <span class="badge badge-full"><i data-lucide="image"></i>Database + files</span>
               <% } else { %>
               <span class="badge"><i data-lucide="database"></i>Database only</span>
               <% } %>
               <% if (inv) { %>
               <div class="muted small pb-inv">
-                <%= inv.tables ? inv.tables.length : 0 %> tables<% if (inv.extensions && inv.extensions.length) { %> · <%= inv.extensions.length %> extensions<% } %><% if (inv.themes && inv.themes.length) { %> · <%= inv.themes.length %> themes<% } %><% if (inv.version) { %> · v<%= inv.version %><% } %>
+                <%= inv.tables ? inv.tables.length : 0 %> tables<% if (inv.dirs && inv.dirs['storage/app']) { %> · <%= inv.dirs['storage/app'] %> MB of files<% } %><% if (inv.version) { %> · v<%= inv.version %><% } %>
                 <% if (inv.extensions && inv.extensions.length) { %>
-                <br><span title="<%= inv.extensions.join(', ') %>"><%= inv.extensions.slice(0, 3).join(', ') %><%= inv.extensions.length > 3 ? ', +' + (inv.extensions.length - 3) : '' %></span>
+                <br><span title="Extensions detected when this backup was made: <%= inv.extensions.join(', ') %>. Their tables are inside the backup; the extension itself has to be reinstalled."><i data-lucide="puzzle" style="width:11px;height:11px;vertical-align:-1px"></i> <%= inv.extensions.length %> extensions detected</span>
                 <% } %>
               </div>
               <% } %>
@@ -84,10 +90,10 @@
 <% if (isPay) { %>
 <dialog id="paymenter-restore" class="modal">
   <form method="post" action="/restore-paymenter" class="form">
-    <h2><i data-lucide="credit-card"></i>Restore a Paymenter database</h2>
+    <h2><i data-lucide="<%= isFiles ? 'image' : 'credit-card' %>"></i>Restore <%= isFiles ? 'Paymenter (database + files)' : 'a Paymenter database' %></h2>
     <label>Backup to restore
       <select name="backup_id" id="paymenter-backup-select">
-        <% backups.forEach(b => { %><option value="<%= b.id %>" data-files="<%= b.has_files ? 1 : 0 %>"><%= (b.owner_label || 'Deleted Paymenter') %> — <%= b.created_at %><%= b.has_files ? ' (full)' : ' (database only)' %></option><% }) %>
+        <% backups.forEach(b => { %><option value="<%= b.id %>" data-files="<%= b.has_files ? 1 : 0 %>"><%= (b.owner_label || 'Deleted Paymenter') %> — <%= b.created_at %><%= b.has_files ? ' (database + files)' : ' (database only)' %></option><% }) %>
       </select>
     </label>
     <label>Destination
@@ -109,15 +115,15 @@
 
     <h3 class="sub-title">What to restore</h3>
     <label class="check-row">
-      <input type="checkbox" name="restore_files" value="1" checked>
-      <span><b>Uploaded files, extensions and themes</b><br><span class="muted small">Logo, favicon, product images, invoices, the extensions you installed and your custom themes. Leave it on to bring the site back exactly as it was.</span></span>
+      <input type="checkbox" name="restore_files" value="1" <%= isFiles ? 'checked' : '' %>>
+      <span><b>Uploaded files (logo, favicon, product images)</b><br><span class="muted small"><% if (isFiles) { %>Leave it on so you do not have to upload every image again by hand.<% } else { %>These backups are database-only, so there are no files inside them. To bring the images back, restore one from <b>Paymenter database + files</b>.<% } %></span></span>
     </label>
     <label class="check-row">
       <input type="checkbox" name="restore_env" value="1">
       <span><b>Replace the <code>.env</code> file</b><br><span class="muted small">Off by default: on a <b>new</b> VPS the <code>.env</code> holds different database credentials and <code>APP_URL</code>. Turn it on only when restoring onto the <b>same</b> VPS. The current file is saved next to it before being replaced.</span></span>
     </label>
 
-    <p class="muted small">The database is always restored (including the tables added by extensions). The destination VPS must already have Paymenter installed with its database created. If a backup says "database only" it was made before full backups existed, so there are no files inside it to restore.</p>
+    <p class="muted small">The database is always restored, <b>including the tables added by your extensions</b> — the dump carries every table there is. The extensions themselves have to be reinstalled on the destination VPS, which must already have Paymenter installed with its database created.</p>
     <div class="form-actions">
       <button class="btn" type="button" onclick="document.getElementById('paymenter-restore').close()">Cancel</button>
       <button class="btn btn-warn" type="submit"><i data-lucide="history"></i>Restore Paymenter</button>

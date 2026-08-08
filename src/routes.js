@@ -64,9 +64,11 @@ function scheduleParts() {
   const nodesH = parseInt(getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')), 10) || 0;
   const panelH = parseInt(getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')), 10) || 0;
   const paymenterH = parseInt(getSetting('schedule_hours_paymenter', '0'), 10) || 0;
+  const paymenterFilesH = parseInt(getSetting('schedule_hours_paymenter_files', '0'), 10) || 0;
   const nodesLast = parseInt(getSetting('last_auto_run_nodes', getSetting('last_auto_run', '0')), 10) || Date.now();
   const panelLast = parseInt(getSetting('last_auto_run_panel', getSetting('last_auto_run', '0')), 10) || Date.now();
   const paymenterLast = parseInt(getSetting('last_auto_run_paymenter', '0'), 10) || Date.now();
+  const paymenterFilesLast = parseInt(getSetting('last_auto_run_paymenter_files', '0'), 10) || Date.now();
 
   // Limpieza de copias viejas: la retención define la antigüedad máxima de una
   // copia (p. ej. 168h = 7 días). El contador muestra cuándo le toca ser
@@ -89,10 +91,11 @@ function scheduleParts() {
   }
 
   return {
-    nodesH, panelH, paymenterH, retentionH,
+    nodesH, panelH, paymenterH, paymenterFilesH, retentionH,
     next_run_nodes: nodesH ? nodesLast + nodesH * 3600 * 1000 : null,
     next_run_panel: panelH ? panelLast + panelH * 3600 * 1000 : null,
     next_run_paymenter: paymenterH ? paymenterLast + paymenterH * 3600 * 1000 : null,
+    next_run_paymenter_files: paymenterFilesH ? paymenterFilesLast + paymenterFilesH * 3600 * 1000 : null,
     next_run_cleanup: nextCleanup,
   };
 }
@@ -100,7 +103,7 @@ function scheduleParts() {
 function nextAutoRun() {
   // El "próximo" general es el más cercano de todos (para compatibilidad).
   const p = scheduleParts();
-  const times = [p.next_run_nodes, p.next_run_panel, p.next_run_paymenter].filter(Boolean);
+  const times = [p.next_run_nodes, p.next_run_panel, p.next_run_paymenter, p.next_run_paymenter_files].filter(Boolean);
   return times.length ? Math.min(...times) : null;
 }
 
@@ -169,6 +172,7 @@ router.get('/', (req, res) => {
     scheduleHoursNodes: sched.nodesH,
     scheduleHoursPanel: sched.panelH,
     scheduleHoursPaymenter: sched.paymenterH,
+    scheduleHoursPaymenterFiles: sched.paymenterFilesH,
     retentionHours: parseInt(getSetting('retention_hours', '0'), 10),
   };
   const nodes = db.prepare('SELECT id, name FROM nodes').all();
@@ -333,10 +337,13 @@ router.get('/nodes', (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/paymenter', (req, res) => {
   const paymenters = db.prepare('SELECT * FROM paymenters ORDER BY id').all();
+  // Las estadísticas cuentan las dos clases de copia de Paymenter.
+  const anyPaymenter = "type IN ('paymenter_db', 'paymenter_files')";
   const pmStats = {
-    backups: db.prepare("SELECT COUNT(*) AS c FROM backups WHERE type = 'paymenter_db'").get().c,
-    last: db.prepare("SELECT created_at FROM backups WHERE type = 'paymenter_db' ORDER BY id DESC LIMIT 1").get(),
+    backups: db.prepare(`SELECT COUNT(*) AS c FROM backups WHERE ${anyPaymenter}`).get().c,
+    last: db.prepare(`SELECT created_at FROM backups WHERE ${anyPaymenter} ORDER BY id DESC LIMIT 1`).get(),
     scheduleHours: parseInt(getSetting('schedule_hours_paymenter', '0'), 10) || 0,
+    scheduleHoursFiles: parseInt(getSetting('schedule_hours_paymenter_files', '0'), 10) || 0,
   };
   res.render('paymenter', { title: 'Paymenter', active: 'paymenter', paymenters, pmStats });
 });
@@ -416,29 +423,47 @@ router.get('/backups', (req, res) => {
     FROM backups WHERE type = 'panel_db'
     GROUP BY day ORDER BY day DESC
   `).all();
-  const paymenterDays = db.prepare(`
+  const dayGroups = (where) => db.prepare(`
     SELECT substr(created_at, 1, 10) AS day,
       COUNT(*) AS cnt,
       COALESCE(SUM(size), 0) AS total_size,
       MAX(created_at) AS last_at
-    FROM backups WHERE type = 'paymenter_db'
+    FROM backups WHERE ${where}
     GROUP BY day ORDER BY day DESC
   `).all();
+  // Las dos clases de copia de Paymenter se listan por separado. Las copias
+  // antiguas que llevaban archivos siguen teniendo el tipo 'paymenter_db',
+  // así que se clasifican por has_files.
+  const paymenterDays = dayGroups("type = 'paymenter_db' AND COALESCE(has_files, 0) = 0");
+  const paymenterFilesDays = dayGroups("type = 'paymenter_files' OR (type = 'paymenter_db' AND has_files = 1)");
   const paymenters = db.prepare('SELECT id, name FROM paymenters ORDER BY id').all();
-  res.render('backups', { title: 'Backups', active: 'backups', nodes, panelDays, paymenterDays, paymenters });
+  res.render('backups', {
+    title: 'Backups', active: 'backups', nodes,
+    panelDays: dayGroups("type = 'panel_db'"),
+    paymenterDays, paymenterFilesDays, paymenters,
+  });
 });
 
-// Copias de base de datos (panel o Paymenter) de un día concreto.
+// Copias de un día concreto: base de datos del panel, base de datos de
+// Paymenter, o base de datos + archivos subidos de Paymenter.
 router.get('/db-backups/:type/:day', (req, res) => {
-  const type = req.params.type === 'paymenter' ? 'paymenter_db' : 'panel_db';
+  const kind = ['paymenter', 'paymenter_files'].includes(req.params.type) ? req.params.type : 'panel';
   const day = req.params.day; // 'YYYY-MM-DD'
-  const isPaymenter = type === 'paymenter_db';
   let backups;
-  if (isPaymenter) {
+  if (kind === 'paymenter_files') {
     backups = db.prepare(`
       SELECT b.*, pm.name AS owner_label FROM backups b
       LEFT JOIN paymenters pm ON pm.id = b.paymenter_id
-      WHERE b.type = 'paymenter_db' AND substr(b.created_at, 1, 10) = ?
+      WHERE (b.type = 'paymenter_files' OR (b.type = 'paymenter_db' AND b.has_files = 1))
+        AND substr(b.created_at, 1, 10) = ?
+      ORDER BY b.id DESC
+    `).all(day);
+  } else if (kind === 'paymenter') {
+    backups = db.prepare(`
+      SELECT b.*, pm.name AS owner_label FROM backups b
+      LEFT JOIN paymenters pm ON pm.id = b.paymenter_id
+      WHERE b.type = 'paymenter_db' AND COALESCE(b.has_files, 0) = 0
+        AND substr(b.created_at, 1, 10) = ?
       ORDER BY b.id DESC
     `).all(day);
   } else {
@@ -449,11 +474,11 @@ router.get('/db-backups/:type/:day', (req, res) => {
       ORDER BY b.id DESC
     `).all(day);
   }
+  const titles = { panel: 'Panel DB', paymenter: 'Paymenter DB', paymenter_files: 'Paymenter DB + files' };
   res.render('db_backups', {
-    title: `${isPaymenter ? 'Paymenter' : 'Panel'} DB — ${day}`,
+    title: `${titles[kind]} — ${day}`,
     active: 'backups',
-    kind: isPaymenter ? 'paymenter' : 'panel',
-    day, backups,
+    kind, day, backups,
   });
 });
 
@@ -484,7 +509,7 @@ router.get('/snapshots/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/backups/run', requirePerm('run_backups'), (req, res) => {
   if (backup.job.active) return go(res, back(req), null, 'A task is already running.');
-  const target = ['all', 'both', 'nodes', 'panel', 'paymenter', 'node'].includes(req.body.target) ? req.body.target : 'both';
+  const target = ['all', 'both', 'nodes', 'panel', 'paymenter', 'paymenter_files', 'node'].includes(req.body.target) ? req.body.target : 'both';
   const opts = target === 'node' ? { target: 'nodes', nodeId: parseInt(req.body.node_id, 10) } : { target };
   logger.info(`Manual backup started by ${req.session.admin.email}.`);
   backup.runBackup(opts).catch((e) => logger.error(e.message));
@@ -600,6 +625,7 @@ router.get('/api/job', (req, res) => {
     next_run_nodes: p.next_run_nodes,
     next_run_panel: p.next_run_panel,
     next_run_paymenter: p.next_run_paymenter,
+    next_run_paymenter_files: p.next_run_paymenter_files,
     next_run_cleanup: p.next_run_cleanup,
     server_now: Date.now(),
   });
@@ -623,6 +649,7 @@ router.get('/settings', requirePerm('manage_settings'), (req, res) => {
     scheduleHoursNodes: getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0')),
     scheduleHoursPanel: getSetting('schedule_hours_panel', getSetting('schedule_hours', '0')),
     scheduleHoursPaymenter: getSetting('schedule_hours_paymenter', '0'),
+    scheduleHoursPaymenterFiles: getSetting('schedule_hours_paymenter_files', '0'),
     retentionHours: getSetting('retention_hours', '0'),
     backupTarget: getSetting('backup_target', 'both'),
     extApiKey: getSetting('ext_api_key', ''),
@@ -643,18 +670,22 @@ router.post('/settings', requirePerm('manage_settings'), (req, res) => {
   const prevNodes = getSetting('schedule_hours_nodes', getSetting('schedule_hours', '0'));
   const prevPanel = getSetting('schedule_hours_panel', getSetting('schedule_hours', '0'));
   const prevPaymenter = getSetting('schedule_hours_paymenter', '0');
+  const prevPaymenterFiles = getSetting('schedule_hours_paymenter_files', '0');
   const newNodes = valid.includes(req.body.schedule_hours_nodes) ? req.body.schedule_hours_nodes : '0';
   const newPanel = valid.includes(req.body.schedule_hours_panel) ? req.body.schedule_hours_panel : '0';
   const newPaymenter = valid.includes(req.body.schedule_hours_paymenter) ? req.body.schedule_hours_paymenter : '0';
+  const newPaymenterFiles = valid.includes(req.body.schedule_hours_paymenter_files) ? req.body.schedule_hours_paymenter_files : '0';
   setSetting('schedule_hours_nodes', newNodes);
   setSetting('schedule_hours_panel', newPanel);
   setSetting('schedule_hours_paymenter', newPaymenter);
+  setSetting('schedule_hours_paymenter_files', newPaymenterFiles);
   setSetting('retention_hours', valid.includes(req.body.retention_hours) ? req.body.retention_hours : '0');
   // Cada contador se reinicia solo si su intervalo cambió (para no reiniciar los otros).
   const now = String(Date.now());
   if (newNodes !== prevNodes) setSetting('last_auto_run_nodes', now);
   if (newPanel !== prevPanel) setSetting('last_auto_run_panel', now);
   if (newPaymenter !== prevPaymenter) setSetting('last_auto_run_paymenter', now);
+  if (newPaymenterFiles !== prevPaymenterFiles) setSetting('last_auto_run_paymenter_files', now);
   logger.info(`Settings updated by ${req.session.admin.email}.`);
   go(res, '/settings', 'Settings saved.');
 });

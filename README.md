@@ -347,7 +347,9 @@ If your panel is not in the normal folder (`/var/www/pterodactyl`), tell it the 
 
 **Rather not rebuild right now?** Run `sudo bash install.sh --no-build`. The admin area works immediately; the users' menu button appears once you run `cd /var/www/pterodactyl && yarn build:production`. Until then the page is still reachable at `https://YOUR-PANEL/pterobackups/server/<server-id>`.
 
-**Using a theme that changes the frontend (Arix and similar)?** Install the theme first and the extension after — a rebuild overwrites the theme's frontend changes, and reinstalling the theme drops the menu entry (just run `install.sh` again). The admin button is unaffected: it does not depend on the build.
+**Using the Arix theme?** Arix does not draw the server menu from `routes.ts` — it draws it from a link list stored in the database. The installer handles that too, with `php artisan pterobackups:arix-link` (idempotent, keeps the rest of your menu, `--remove` to undo). Install the theme first and the extension after: a rebuild overwrites the theme's frontend changes, and reinstalling the theme drops the `routes.ts` entry — just run `install.sh` again. The admin button is unaffected either way, since it does not depend on the build.
+
+**If the rebuild fails** the installer does not stop: everything else is installed, the full build output is saved to `/tmp/pterobackups-build.log` and the last error lines are printed so you can see what went wrong.
 
 ### Step 3 — Connect the panel with the backup system
 

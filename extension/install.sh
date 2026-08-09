@@ -171,6 +171,8 @@ fi
 # ---------------------------------------------------------------------------
 # 5) Recompilar el panel (solo por el botón del área de usuario)
 # ---------------------------------------------------------------------------
+BUILD_OK=0
+BUILD_LOG="/tmp/pterobackups-build.log"
 if [ "$DO_BUILD" = "1" ]; then
   if ! command -v yarn >/dev/null 2>&1; then
     echo ""
@@ -183,14 +185,53 @@ if [ "$DO_BUILD" = "1" ]; then
     echo ""
     echo "==> Recompilando el panel (tarda varios minutos, no lo interrumpas)..."
     cd "$PANEL"
-    yarn install --network-timeout 600000
-    yarn build:production
-    echo "    Panel recompilado."
+    # Si el build falla NO abortamos la instalación: el área de admin y las
+    # rutas ya funcionan. Guardamos la salida entera para poder diagnosticarlo.
+    # Ojo con el "| tee": el estado de una tubería es el del ÚLTIMO comando
+    # (tee, que siempre va bien), así que hay que mirar PIPESTATUS.
+    set +e
+    { yarn install --network-timeout 600000 && yarn build:production; } 2>&1 | tee "$BUILD_LOG"
+    BUILD_RC=${PIPESTATUS[0]}
+    set -e
+    if [ "$BUILD_RC" = "0" ]; then
+      BUILD_OK=1
+      echo "    Panel recompilado."
+    else
+      echo ""
+      echo "    -------------------------------------------------------------"
+      echo "    LA RECOMPILACIÓN FALLÓ. El resto de la extensión SÍ se instaló."
+      echo "    Últimas líneas del error:"
+      echo "    -------------------------------------------------------------"
+      grep -iE "error|ERROR in|Module not found|TS[0-9]{4}|heap out of memory" "$BUILD_LOG" | tail -n 20 | sed 's/^/      /'
+      echo "    -------------------------------------------------------------"
+      echo "    Registro completo en: $BUILD_LOG"
+      echo "    Mándamelo si quieres que lo revise."
+      echo "    -------------------------------------------------------------"
+    fi
   fi
 else
   echo ""
   echo "    (Recompilación omitida. El botón del menú de usuario aparecerá"
   echo "     cuando ejecutes:  cd $PANEL && yarn && yarn build:production)"
+fi
+
+# ---------------------------------------------------------------------------
+# 5b) Tema Arix: su menú lateral NO sale de routes.ts, sino de una lista de
+#     enlaces guardada en la base de datos. Añadimos ahí la entrada (eso no
+#     necesita recompilar). Solo tiene sentido si la página existe, o sea si
+#     el panel se llegó a compilar con la ruta dentro.
+# ---------------------------------------------------------------------------
+if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
+  echo ""
+  echo "==> Tema Arix detectado."
+  if [ "$BUILD_OK" = "1" ]; then
+    (cd "$PANEL" && php artisan pterobackups:arix-link) || \
+      echo "    AVISO: no se pudo añadir el botón al menú de Arix (mira el mensaje de arriba)."
+  else
+    echo "    El botón del menú NO se añade todavía: sin recompilar, la página"
+    echo "    daría 'no encontrada' al pulsarlo. Cuando el build funcione, ejecuta:"
+    echo "      cd $PANEL && php artisan pterobackups:arix-link"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -13,14 +13,34 @@ Los dos botones se registran de forma **nativa**, igual que cualquier modificaci
 | --- | --- | --- |
 | Menú del servidor (usuarios) | una entrada en `resources/scripts/routers/routes.ts` | **Sí** (`yarn build:production`, lo hace el instalador) |
 | Menú del área admin | un `<li>` en `resources/views/layouts/admin.blade.php` | No (esa parte del panel es Blade) |
+| Menú del servidor **con el tema Arix** | una entrada en su lista de enlaces, guardada en la base de datos | No para el botón (sí para la página) |
 
 Antes el botón se metía con un script que escaneaba la página constantemente buscando dónde colgarse. Eso disparaba la CPU del navegador —sobre todo en móvil en "modo escritorio"— y hacía que **Cloudflare tomara al usuario por un bot y le mostrara su pantalla de comprobación**. Con el método nativo no se ejecuta ni una línea de JavaScript extra: el menú lo dibuja el propio panel.
 
-### Si usas un tema como Arix
+### Tema Arix
 
-Recompilar el panel **sobrescribe los cambios del tema en el frontend**, así que el orden importa: instala primero tu tema y **después** esta extensión (o vuelve a aplicar el tema y ejecuta `sudo bash install.sh` otra vez).
+Arix **no dibuja el menú del servidor a partir de `routes.ts`** como el panel normal: lo dibuja a partir de una lista de enlaces que guarda en la base de datos (la misma que editas en `/admin/arix` → Links). Por eso, con Arix hacen falta las dos cosas:
 
-Si prefieres no recompilar ahora, usa `sudo bash install.sh --no-build`: el área de admin queda funcionando al instante y el botón del menú de los usuarios aparecerá cuando ejecutes `cd /var/www/pterodactyl && yarn build:production`. Mientras tanto, la página sigue siendo accesible en `https://TU-PANEL/pterobackups/server/<id-del-servidor>`.
+1. La **entrada en `routes.ts`** (más el `yarn build:production`), que es lo que hace que la página exista en `/server/<id>/pterobackups`.
+2. La **entrada en su lista de enlaces**, que es lo que hace que se vea el botón. Eso lo pone el instalador solo, con este comando:
+
+```bash
+cd /var/www/pterodactyl && php artisan pterobackups:arix-link
+```
+
+El comando es idempotente (si ya está, no lo duplica), respeta el resto de tu menú y coloca el botón justo detrás del de "Backups". Para quitarlo: `php artisan pterobackups:arix-link --remove`. Para ver si está puesto: `--status`.
+
+> Si Arix todavía no ha guardado su configuración de enlaces, el comando te lo dirá: entra una vez a `/admin/arix` → Links, pulsa Guardar y vuelve a ejecutarlo.
+
+**Orden de instalación:** primero el tema, después la extensión. Recompilar sobrescribe los cambios del tema en el frontend, y reinstalar el tema borra la entrada de `routes.ts` (basta con volver a ejecutar `sudo bash install.sh`).
+
+### Si prefieres no recompilar ahora
+
+Usa `sudo bash install.sh --no-build`: el área de admin queda funcionando al instante y el botón del menú de los usuarios aparecerá cuando ejecutes `cd /var/www/pterodactyl && yarn build:production`. Mientras tanto, la página sigue siendo accesible en `https://TU-PANEL/pterobackups/server/<id-del-servidor>`.
+
+### Si la recompilación falla
+
+El instalador **no se detiene**: el área de admin, las rutas y la página quedan instaladas igual. Guarda toda la salida del build en `/tmp/pterobackups-build.log` y te enseña las últimas líneas del error. Con Arix, además, no añade el botón al menú hasta que el build funcione, para que no acabes con un botón que lleva a una página inexistente.
 
 ## Requisitos
 

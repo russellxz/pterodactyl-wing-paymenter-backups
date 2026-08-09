@@ -49,6 +49,19 @@ grep -q 'PteroBackups NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/d
   || echo "    NO está -> corre install.sh, o entra a /admin/pterobackups directamente"
 
 echo ""
+echo "[3b] Tema Arix (su menú sale de la base de datos, no de routes.ts):"
+if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
+  echo "    Arix detectado."
+  if (cd "$PANEL" && php artisan pterobackups:arix-link --status >/dev/null 2>&1); then
+    echo "    botón en el menú de Arix   OK"
+  else
+    echo "    botón en el menú de Arix   NO -> corre: cd $PANEL && php artisan pterobackups:arix-link"
+  fi
+else
+  echo "    Arix no está instalado (se usa el menú normal del panel)."
+fi
+
+echo ""
 echo "[4] Rutas instaladas:"
 grep -q 'PteroBackups START' "$PANEL/routes/base.php" 2>/dev/null && echo "    base.php  OK" || echo "    base.php  SIN RUTAS -> corre install.sh"
 grep -q 'PteroBackups START' "$PANEL/routes/admin.php" 2>/dev/null && echo "    admin.php OK" || echo "    admin.php SIN RUTAS -> corre install.sh"

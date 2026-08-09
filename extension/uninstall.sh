@@ -19,6 +19,11 @@ fi
 
 echo "==> Desinstalando la extensión PteroBackups de: $PANEL"
 
+# Botón del menú de Arix (vive en la base de datos, no en un archivo)
+if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
+  (cd "$PANEL" && php artisan pterobackups:arix-link --remove) 2>/dev/null || true
+fi
+
 # Revertir el ajuste de la ruta comodín de React
 sed -i 's#api|auth|admin|daemon|pterobackups#api|auth|admin|daemon#g' "$PANEL/routes/base.php" 2>/dev/null || true
 
@@ -66,6 +71,7 @@ done
 # Quitar archivos
 rm -rf "$PANEL/app/Http/Controllers/PteroBackups" \
        "$PANEL/app/PteroBackups" \
+       "$PANEL/app/Console/Commands/PteroBackupsArixLinkCommand.php" \
        "$PANEL/resources/views/admin/pterobackups" \
        "$PANEL/resources/views/pterobackups" \
        "$PANEL/resources/scripts/components/server/pterobackups" \

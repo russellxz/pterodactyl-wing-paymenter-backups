@@ -14,16 +14,39 @@ if [ ! -f "$PANEL/artisan" ]; then
 fi
 
 echo ""
-echo "[1] Archivos públicos (deben salir 3: inject.js, admin-inject.js, pb.css):"
-ls -1 "$PANEL/public/pterobackups" 2>/dev/null || echo "    FALTAN -> corre: sudo bash install.sh"
+echo "[1] Archivos de la extensión:"
+[ -f "$PANEL/public/pterobackups/pb.css" ] && echo "    estilos            OK" || echo "    estilos            FALTAN -> corre install.sh"
+[ -d "$PANEL/app/Http/Controllers/PteroBackups" ] && echo "    controladores      OK" || echo "    controladores      FALTAN -> corre install.sh"
+[ -d "$PANEL/resources/scripts/components/server/pterobackups" ] && echo "    componente React   OK" || echo "    componente React   FALTA  -> corre install.sh"
 
 echo ""
-echo "[2] Plantillas con el script de USUARIO inyectado:"
-grep -rl 'pterobackups/inject.js' "$PANEL/resources/views" 2>/dev/null | grep -v 'views/pterobackups' || echo "    NINGUNA -> corre: sudo bash install.sh"
+echo "[2] Botón del ÁREA DE USUARIO (entrada nativa en routes.ts):"
+ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
+if [ ! -f "$ROUTES_TS" ]; then
+  echo "    no existe $ROUTES_TS"
+elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
+  echo "    registrado en routes.ts  OK"
+  # El botón solo aparece si el panel se recompiló DESPUÉS de registrarlo.
+  BUILT=$(ls -t "$PANEL/public/assets/"*.js 2>/dev/null | head -n1)
+  if [ -n "$BUILT" ]; then
+    if [ "$BUILT" -nt "$ROUTES_TS" ]; then
+      echo "    panel recompilado        OK"
+    else
+      echo "    panel recompilado        NO -> el botón no saldrá hasta que hagas:"
+      echo "                                  cd $PANEL && yarn build:production"
+    fi
+  else
+    echo "    no se encontró public/assets: ¿compilaste el panel alguna vez?"
+  fi
+else
+  echo "    NO registrado -> corre: sudo bash install.sh"
+fi
 
 echo ""
-echo "[3] Plantillas con el script de ADMIN inyectado:"
-grep -rl 'pterobackups/admin-inject.js' "$PANEL/resources/views" 2>/dev/null || echo "    NINGUNA"
+echo "[3] Botón del ÁREA DE ADMIN (bloque Blade, no necesita recompilar):"
+grep -q 'PteroBackups NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null \
+  && echo "    en el menú de admin      OK" \
+  || echo "    NO está -> corre install.sh, o entra a /admin/pterobackups directamente"
 
 echo ""
 echo "[4] Rutas instaladas:"
@@ -35,8 +58,14 @@ echo "[4b] Ruta comodín de React (debe dejar pasar /pterobackups):"
 grep -q 'api|auth|admin|daemon|pterobackups' "$PANEL/routes/base.php" 2>/dev/null && echo "    OK" || echo "    SIN AJUSTAR -> corre: sudo bash install.sh"
 
 echo ""
-echo "[5] TODAS las plantillas de página que tiene el panel (con </body>):"
-grep -rl '</body>' "$PANEL/resources/views" 2>/dev/null | grep -vi 'mail\|vendor\|pterobackups' || echo "    (ninguna encontrada)"
+echo "[5] Restos de la versión antigua (inyección por JavaScript):"
+LEFT=$(grep -rl 'pterobackups/inject.js\|pterobackups/admin-inject.js' "$PANEL/resources/views" 2>/dev/null || true)
+if [ -n "$LEFT" ]; then
+  echo "    QUEDAN restos (vuelve a correr install.sh para limpiarlos):"
+  echo "$LEFT" | sed 's/^/      /'
+else
+  echo "    ninguno  OK"
+fi
 
 echo ""
 echo "[6] Limpiando caché de vistas por si acaso..."

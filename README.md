@@ -20,7 +20,7 @@ Everything is managed from a web page with a dark design, professional icons, re
 • Real-time progress and a live logs page.
 • SSH and DB passwords stored encrypted (AES-256) in a local SQLite database (no database to install: it creates itself in a file).
 
-The extension for the Pterodactyl panel is included in the `extension/` folder: admins manage all backups from the panel's admin area, and each user views, downloads and restores the backups of THEIR server from a new "Backup 2.0" option in their menu. Compatible with the Arix v2 theme (it does not recompile the panel). Full instructions in `extension/README.md`.
+The extension for the Pterodactyl panel is included in the `extension/` folder: admins manage all backups from the panel's admin area, and each user views, downloads and restores the backups of THEIR server from a new "Backup 2.0" option in their menu. Both buttons are registered natively (a `routes.ts` entry for the server menu, a Blade `<li>` for the admin menu), so no JavaScript runs in the user's browser to place them. Full instructions in `extension/README.md`.
 
 ───
 
@@ -317,7 +317,7 @@ The extension connects your Pterodactyl panel with this backup page:
 
 • **Panel admins:** a new PteroBackups section in the admin area with everything the page has: make backups on the spot, cancel, live progress, countdown to the next automatic backup, backup dates per node, server search by name or email, download, restore, delete and change the schedule.
 • **Users:** a "Backup 2.0" option in their server's sidebar menu to view, download and restore ONLY their server's backups.
-• Compatible with the Arix v2 theme and any other theme: the extension does not recompile the panel (which is what breaks themes), and the menu button copies the design of the active theme.
+• The menu buttons are registered natively: the server menu entry lives in `resources/scripts/routers/routes.ts` (needs `yarn build:production`, which the installer runs for you) and the admin one is a plain Blade `<li>` (no rebuild). Install your theme first, then the extension — a rebuild overwrites frontend theme changes.
 
 ### Step 1 — Copy the connection details
 
@@ -341,9 +341,13 @@ cd pterodactyl-wing-paymenter-backups/extension
 sudo bash install.sh
 ```
 
-The installer copies the pieces into the panel, adds the routes and clears the caches. At the end it prints several lines starting with `OK:` and the message "PteroBackups extension installed successfully".
+The installer copies the pieces into the panel, adds the routes, registers both menu buttons and clears the caches. Registering the server-menu button means **rebuilding the panel frontend**, which the installer does for you with `yarn` — that step takes several minutes, so let it finish. At the end it prints several lines starting with `OK:` and the message "PteroBackups extension installed successfully".
 
 If your panel is not in the normal folder (`/var/www/pterodactyl`), tell it the path: `sudo bash install.sh /path/to/your/panel`
+
+**Rather not rebuild right now?** Run `sudo bash install.sh --no-build`. The admin area works immediately; the users' menu button appears once you run `cd /var/www/pterodactyl && yarn build:production`. Until then the page is still reachable at `https://YOUR-PANEL/pterobackups/server/<server-id>`.
+
+**Using a theme that changes the frontend (Arix and similar)?** Install the theme first and the extension after — a rebuild overwrites the theme's frontend changes, and reinstalling the theme drops the menu entry (just run `install.sh` again). The admin button is unaffected: it does not depend on the build.
 
 ### Step 3 — Connect the panel with the backup system
 
@@ -397,7 +401,7 @@ More details and troubleshooting for the extension in `extension/README.md`.
 ## Roadmap
 
 - [x] Phase 1: web page for the backup system.
-- [x] Phase 2: extension for the Pterodactyl panel (`extension/` folder): full management from the admin area, backups viewable/downloadable/restorable by each user on their server, compatible with the Arix v2 theme.
+- [x] Phase 2: extension for the Pterodactyl panel (`extension/` folder): full management from the admin area, backups viewable/downloadable/restorable by each user on their server, with both menu buttons registered natively.
 
 ## License
 

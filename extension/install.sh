@@ -86,6 +86,16 @@ echo "    Archivos copiados."
 
 # Restos de la versión anterior, que metía el botón con JavaScript.
 rm -f "$PANEL/public/pterobackups/inject.js" "$PANEL/public/pterobackups/admin-inject.js"
+
+# Y la pantalla suelta que abría aquel botón inyectado.
+#
+# Era una página aparte, con su propio HTML y su propio JavaScript, servida en
+# /pterobackups/server/{id}. Ya no la usa nadie: la pantalla buena es la de
+# React, la del botón "Backup 2.0". Tenerlas las dos es justo lo que da la
+# sensación de que sigue instalada una versión vieja.
+rm -rf "$PANEL/resources/views/pterobackups"
+rm -f  "$PANEL/public/pterobackups/pb.css"
+rmdir  "$PANEL/public/pterobackups" 2>/dev/null || true
 for FILE in $(grep -rl 'pterobackups/inject.js\|pterobackups/admin-inject.js' "$PANEL/resources/views" 2>/dev/null || true); do
   sed -i '\#pterobackups/inject.js#d;\#pterobackups/admin-inject.js#d' "$FILE" 2>/dev/null || true
   echo "    Limpiada la inyección antigua en $(basename "$FILE")"

@@ -15,7 +15,7 @@ fi
 
 echo ""
 echo "[1] Archivos de la extensión:"
-[ -f "$PANEL/public/pterobackups/pb.css" ] && echo "    estilos            OK" || echo "    estilos            FALTAN -> corre install.sh"
+[ -d "$PANEL/resources/scripts/components/server/pterobackups" ] && echo "    pantalla React     OK" || echo "    pantalla React     FALTA -> corre install.sh"
 [ -d "$PANEL/app/Http/Controllers/PteroBackups" ] && echo "    controladores      OK" || echo "    controladores      FALTAN -> corre install.sh"
 [ -d "$PANEL/resources/scripts/components/server/pterobackups" ] && echo "    componente React   OK" || echo "    componente React   FALTA  -> corre install.sh"
 

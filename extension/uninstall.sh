@@ -42,13 +42,25 @@ fi
 # Las inserciones van entre marcas, así que borrarlas deja el archivo BYTE A
 # BYTE como estaba antes de instalar.
 ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PATCHER="$HERE/tools/patch-routes.php"
 NEEDS_BUILD=0
+
+# 1) Versión actual: el parcheador restaura routes.ts desde la copia del
+#    original que guardó al instalar, así queda BYTE A BYTE como estaba.
+if [ -f "$ROUTES_TS" ] && [ -f "$PATCHER" ]; then
+  if php "$PATCHER" "$PANEL" --remove 2>/dev/null | grep -qv "No estaba puesto"; then
+    grep -q 'pterobackups' "$ROUTES_TS" || NEEDS_BUILD=1
+  fi
+  grep -q 'pterobackups:inicio\|PteroBackupsContainer' "$ROUTES_TS" || echo "    routes.ts limpio."
+fi
+
+# 2) Versiones anteriores, que dejaban el bloque con otras marcas o sin ellas.
 if [ -f "$ROUTES_TS" ] && grep -q 'PteroBackups START' "$ROUTES_TS"; then
   sed -i '/\/\/ PteroBackups START/,/\/\/ PteroBackups END/d' "$ROUTES_TS"
-  echo "    Entrada del menú de usuario retirada de routes.ts."
+  echo "    Entrada con marcas antiguas retirada de routes.ts."
   NEEDS_BUILD=1
 fi
-# Versión antigua sin marcas (por si se instaló con un install.sh anterior).
 if [ -f "$ROUTES_TS" ] && grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
   sed -i "\#components/server/pterobackups/PteroBackupsContainer#d" "$ROUTES_TS"
   awk '
@@ -63,9 +75,10 @@ if [ -f "$ROUTES_TS" ] && grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
       for (i = 1; i <= NR; i++) if (i < skipFrom || i > skipTo) print lines[i]
     }
   ' "$ROUTES_TS" > "$ROUTES_TS.pbtmp" && mv "$ROUTES_TS.pbtmp" "$ROUTES_TS"
-  echo "    Entrada antigua (sin marcas) retirada de routes.ts."
+  echo "    Entrada sin marcas retirada de routes.ts."
   NEEDS_BUILD=1
 fi
+rm -f "$ROUTES_TS.pterobackups-original"
 
 # Restos de la versión antigua, que metía el botón con JavaScript inyectado
 # en TODAS las plantillas del panel. Se limpian una por una.

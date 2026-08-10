@@ -24,7 +24,7 @@ echo "[2] Botón del ÁREA DE USUARIO (entrada nativa en routes.ts):"
 ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
 if [ ! -f "$ROUTES_TS" ]; then
   echo "    no existe $ROUTES_TS"
-elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
+elif grep -q 'pterobackups:inicio' "$ROUTES_TS"; then
   echo "    registrado en routes.ts  OK"
   # El botón solo aparece si el panel se recompiló DESPUÉS de registrarlo.
   BUILT=$(ls -t "$PANEL/public/assets/"*.js 2>/dev/null | head -n1)
@@ -38,8 +38,12 @@ elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
   else
     echo "    no se encontró public/assets: ¿compilaste el panel alguna vez?"
   fi
+elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
+  echo "    registrado con marcas ANTIGUAS -> desinstala y vuelve a instalar"
 else
   echo "    NO registrado -> corre: sudo bash install.sh"
+  echo "    (si el build falló, el instalador lo quita a propósito para no"
+  echo "     dejar un botón que lleve a una página que no existe)"
 fi
 
 echo ""

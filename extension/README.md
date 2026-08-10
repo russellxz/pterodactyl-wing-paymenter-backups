@@ -42,8 +42,9 @@ Usa `sudo bash install.sh --no-build`: el área de admin queda funcionando al in
 
 `yarn build:production` ejecuta antes `yarn run clean`, que **borra `public/assets/*.js`**. Si el build falla después, el panel se queda sin frontend: pantalla en blanco. Por eso el instalador nunca compila sin red:
 
+0. **Parchea `routes.ts` con un script PHP** que localiza el array `server: [` contando corchetes (saltándose cadenas y comentarios), inserta el bloque entre marcas `// pterobackups:inicio … fin` y **guarda una copia del archivo original al lado**. Deshacerlo restaura esa copia, así que queda byte a byte como estaba.
 1. **Copia** `public/assets` antes de tocar nada (en `storage/pterobackups-assets-<fecha>`).
-2. **Ajusta la memoria de node** al 75% de la libre, y si hay menos de 2 GB sin swap, crea una swap temporal de 4 GB que se quita sola al terminar.
+2. **Ajusta la memoria de node** al 75% de la libre, y si hay menos de 2 GB sin swap, crea una swap temporal de 4 GB que se quita sola al terminar. Solo descarga dependencias si faltan, usa `npm` si no hay `yarn`, y activa `--openssl-legacy-provider` únicamente si el panel trae webpack 4.
 3. Compila guardando la salida en `storage/logs/pterobackups-build-<fecha>.log`.
 4. **Comprueba que el bundle existe de verdad** (`public/assets/bundle.*.js`), porque un build puede salir con código 0 y no generar nada.
 5. Si algo falla: **devuelve los assets** y **quita la entrada de `routes.ts`**, dejando ambos byte a byte como estaban. El panel sigue funcionando y el área de admin queda instalada igual.

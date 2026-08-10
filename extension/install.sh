@@ -87,57 +87,29 @@ fi
 # 3) Botón del ÁREA DE USUARIO: entrada nativa en routes.ts
 # ---------------------------------------------------------------------------
 ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
+PATCHER="$HERE/tools/patch-routes.php"
 if [ ! -f "$ROUTES_TS" ]; then
   echo "    AVISO: no existe $ROUTES_TS."
   echo "           El botón del área de usuario no se podrá añadir."
   DO_BUILD=0
-elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
-  echo "    El botón de usuario ya estaba registrado en routes.ts."
+elif [ ! -f "$PATCHER" ]; then
+  echo "    AVISO: falta $PATCHER (¿clonaste el repositorio entero?)."
+  DO_BUILD=0
 else
-  # Dos inserciones en una pasada, cada una entre marcas para poder quitarlas
-  # después dejando el archivo BYTE A BYTE como estaba:
-  #   - el import, delante del primero que haya (en TS el orden da igual)
-  #   - la entrada del menú, al final del array de rutas del servidor. Ese
-  #     array es el último que se cierra en el archivo, así que va justo
-  #     delante de su "]," final.
-  IMPORT=$(cat <<'TSEOF'
-// PteroBackups START
-import PteroBackupsContainer from '@/components/server/pterobackups/PteroBackupsContainer';
-// PteroBackups END
-TSEOF
-)
-  ENTRY=$(cat <<'TSEOF'
-        // PteroBackups START
-        {
-            path: '/pterobackups',
-            permission: 'backup.*',
-            name: 'Backup 2.0',
-            component: PteroBackupsContainer,
-        },
-        // PteroBackups END
-TSEOF
-)
-  awk -v imp="$IMPORT" -v block="$ENTRY" '
-    {
-      lines[NR] = $0
-      if (!firstImport && $0 ~ /^import /) firstImport = NR
-      if ($0 ~ /^[[:space:]]*\],[[:space:]]*$/) lastClose = NR
-    }
-    END {
-      for (i = 1; i <= NR; i++) {
-        if (i == firstImport) print imp
-        if (i == lastClose) print block
-        print lines[i]
-      }
-    }
-  ' "$ROUTES_TS" > "$ROUTES_TS.pbtmp" && mv "$ROUTES_TS.pbtmp" "$ROUTES_TS"
-
-  if grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
-    echo "    OK: botón 'Backup 2.0' registrado en routes.ts"
-  else
-    echo "    AVISO: no se pudo registrar el botón en routes.ts (revísalo a mano)."
-    DO_BUILD=0
-  fi
+  # El parcheo lo hace un script PHP: localiza el array "server: [" contando
+  # corchetes (saltándose cadenas y comentarios), mete el bloque entre marcas
+  # y guarda una copia del routes.ts original al lado. Así quitarlo después
+  # deja el archivo BYTE A BYTE como estaba, sin depender de expresiones.
+  set +e
+  php "$PATCHER" "$PANEL"
+  PATCH_RC=$?
+  set -e
+  case "$PATCH_RC" in
+    0) echo "    OK: botón 'Backup 2.0' registrado en routes.ts" ;;
+    2) echo "    El botón de usuario ya estaba registrado en routes.ts." ;;
+    *) echo "    AVISO: no se pudo registrar el botón en routes.ts."
+       DO_BUILD=0 ;;
+  esac
 fi
 
 # ---------------------------------------------------------------------------
@@ -186,9 +158,11 @@ ASSETS_BACKUP="$PANEL/storage/pterobackups-assets-$STAMP"
 SWAPFILE="/swapfile-pterobackups"
 
 # Deshace la entrada del menú de usuario, dejando routes.ts como estaba.
+# El patcher restaura desde la copia del original que guardó al instalar.
 revert_routes_ts() {
   [ -f "$ROUTES_TS" ] || return 0
-  sed -i '/\/\/ PteroBackups START/,/\/\/ PteroBackups END/d' "$ROUTES_TS"
+  [ -f "$PATCHER" ] || return 0
+  php "$PATCHER" "$PANEL" --remove >/dev/null 2>&1 || true
 }
 
 # Devuelve el frontend que había antes de compilar.
@@ -219,15 +193,28 @@ cleanup_swap() {
 }
 
 if [ "$DO_BUILD" = "1" ]; then
-  if ! command -v yarn >/dev/null 2>&1; then
+  # Gestor de paquetes: yarn si está, npm si no.
+  if command -v yarn >/dev/null 2>&1; then
+    PKG=yarn
+  elif command -v npm >/dev/null 2>&1; then
+    PKG=npm
+    echo "    yarn no está instalado: se usará npm (tarda más)."
+  else
+    PKG=""
+  fi
+
+  if [ -z "$PKG" ]; then
     echo ""
-    echo "    AVISO: 'yarn' no está instalado, así que no se puede recompilar."
+    echo "    AVISO: no hay ni yarn ni npm, así que no se puede recompilar."
     echo "           El área de admin ya funciona; para que salga el botón en el"
-    echo "           menú de los usuarios, instala yarn y recompila:"
+    echo "           menú de los usuarios, instala yarn y vuelve a lanzarme:"
     echo "             npm install -g yarn"
-    echo "             cd $PANEL && yarn && yarn build:production"
     revert_routes_ts
     echo "    (La entrada de routes.ts se ha quitado para no dejarla a medias.)"
+  elif ! command -v node >/dev/null 2>&1; then
+    echo ""
+    echo "    AVISO: no está instalado node, así que no se puede recompilar."
+    revert_routes_ts
   else
     echo ""
     echo "==> Preparando la recompilación..."
@@ -266,12 +253,34 @@ if [ "$DO_BUILD" = "1" ]; then
     [ "$NODE_MEM" -gt 4096 ] && NODE_MEM=4096
     echo "    Memoria para node: ${NODE_MEM} MB (libre: ${MEM_FREE} MB)"
 
+    # Los paneles 1.14/1.15 compilan con webpack 5, que NO necesita
+    # --openssl-legacy-provider. Solo se activa si el panel trae webpack 4.
+    EXTRA_NODE_OPTS=""
+    NODE_MAJOR="$(node -v | sed 's/^v//' | cut -d. -f1)"
+    if [ "${NODE_MAJOR:-0}" -ge 17 ] && grep -q '"webpack": *"\^\?4' "$PANEL/package.json" 2>/dev/null; then
+      EXTRA_NODE_OPTS="--openssl-legacy-provider"
+      echo "    webpack 4 con node moderno: se activa --openssl-legacy-provider"
+    fi
+
     echo "==> Recompilando el panel (tarda varios minutos, no lo interrumpas)..."
     mkdir -p "$(dirname "$BUILD_LOG")"
     cd "$PANEL"
+
+    # Las dependencias solo se descargan si faltan: volver a lanzarlas en un
+    # panel con tema ya montado es lento y puede fallar por red sin motivo.
+    if [ -d "$PANEL/node_modules/webpack" ]; then
+      echo "    node_modules ya estaba (se salta la descarga)."
+      DEPS_CMD="true"
+    elif [ "$PKG" = "yarn" ]; then
+      DEPS_CMD="yarn install --network-timeout 600000"
+    else
+      DEPS_CMD="npm install --no-audit --no-fund"
+    fi
+    if [ "$PKG" = "yarn" ]; then BUILD_CMD="yarn build:production"; else BUILD_CMD="npm run build:production"; fi
+
     set +e
-    NODE_OPTIONS="--max-old-space-size=$NODE_MEM" \
-      sh -c 'yarn install --network-timeout 600000 && yarn build:production' > "$BUILD_LOG" 2>&1
+    NODE_OPTIONS="--max-old-space-size=$NODE_MEM $EXTRA_NODE_OPTS" \
+      sh -c "$DEPS_CMD && $BUILD_CMD" > "$BUILD_LOG" 2>&1
     BUILD_RC=$?
     set -e
 

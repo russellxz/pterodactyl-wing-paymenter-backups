@@ -35,6 +35,15 @@ sed -i '/PteroBackups START/,/PteroBackups END/d' "$PANEL/routes/admin.php" 2>/d
 ADMIN_LAYOUT="$PANEL/resources/views/layouts/admin.blade.php"
 if [ -f "$ADMIN_LAYOUT" ]; then
   sed -i '/PteroBackups NAV START/,/PteroBackups NAV END/d' "$ADMIN_LAYOUT" 2>/dev/null || true
+
+# Los huecos del tema.
+#
+# Esto es imprescindible: la entrada del menu llama a route('admin.pterobackups'),
+# y sin la extension esa ruta no existe. Si el archivo se queda, route() lanza
+# excepcion y el area de administracion ENTERA da error 500.
+rm -f  "$PANEL/resources/views/admin/extensions/pterobackups.blade.php"
+rm -rf "$PANEL/resources/scripts/components/server/extensions/pterobackups"
+(cd "$PANEL" && php artisan view:clear >/dev/null 2>&1) || true
   echo "    Botón del menú de admin retirado."
 fi
 

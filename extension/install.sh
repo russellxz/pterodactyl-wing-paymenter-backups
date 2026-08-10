@@ -45,6 +45,38 @@ fi
 echo "==> Instalando la extensión PteroBackups en: $PANEL"
 
 # ---------------------------------------------------------------------------
+# 0) ¿Trae el tema hueco para extensiones?
+#
+# Un tema preparado (Arix con los huecos) recoge solo lo que se deje en esas
+# carpetas: sale la página Y el botón sin tocar routes.ts, sin escribir en la
+# base de datos y, sobre todo, SIN INYECTAR NADA.
+#
+# Si no los trae, se hace como siempre: componente + entrada en routes.ts, y
+# un <li> en la plantilla del admin.
+# ---------------------------------------------------------------------------
+SLOT_CLIENTE="$PANEL/resources/scripts/components/server/extensions"
+SLOT_ADMIN="$PANEL/resources/views/admin/extensions"
+
+if [ -d "$SLOT_CLIENTE" ]; then
+  USA_SLOT=1
+  echo "    Tema con hueco para extensiones: se usará (sin tocar routes.ts)."
+else
+  USA_SLOT=0
+fi
+
+# ---------------------------------------------------------------------------
+# 0b) Restos de instalaciones anteriores de ESTA extensión.
+#
+# Se quitan siempre antes de poner nada, para no acabar con el botón repetido.
+# ---------------------------------------------------------------------------
+rm -rf "$PANEL/resources/scripts/components/server/extensions/pterobackups"
+rm -f  "$PANEL/resources/views/admin/extensions/pterobackups.blade.php"
+
+if grep -q 'PteroBackups NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+  sed -i '/PteroBackups NAV START/,/PteroBackups NAV END/d' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
 # 1) Copiar archivos (controladores, vistas, estilos y componentes React)
 # ---------------------------------------------------------------------------
 cp -r "$HERE/panel/app/." "$PANEL/app/"
@@ -88,7 +120,24 @@ fi
 # ---------------------------------------------------------------------------
 ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
 PATCHER="$HERE/tools/patch-routes.php"
-if [ ! -f "$ROUTES_TS" ]; then
+
+if [ "$USA_SLOT" -eq 1 ]; then
+  # Con el hueco del tema basta con dejar la carpeta: el tema la recoge sola al
+  # compilar y saca la página y el botón. No se toca routes.ts.
+  mkdir -p "$SLOT_CLIENTE/pterobackups"
+  cat > "$SLOT_CLIENTE/pterobackups/route.tsx" <<'TSXEOF'
+import PteroBackupsContainer from '@/components/server/pterobackups/PteroBackupsContainer';
+
+export default {
+    path: '/pterobackups',
+    permission: 'backup.*',
+    name: 'Backup 2.0',
+    icon: 'HiOutlineArchive',
+    component: PteroBackupsContainer,
+};
+TSXEOF
+  echo "    OK: botón 'Backup 2.0' puesto en el hueco de extensiones del tema."
+elif [ ! -f "$ROUTES_TS" ]; then
   echo "    AVISO: no existe $ROUTES_TS."
   echo "           El botón del área de usuario no se podrá añadir."
   DO_BUILD=0
@@ -117,18 +166,43 @@ fi
 #    (esta parte del panel no es React, así que no hay que recompilar nada)
 # ---------------------------------------------------------------------------
 ADMIN_LAYOUT="$PANEL/resources/views/layouts/admin.blade.php"
-if [ ! -f "$ADMIN_LAYOUT" ]; then
+
+if [ -d "$SLOT_ADMIN" ]; then
+  # El tema trae hueco: se deja el archivo y listo. Sale al momento, sin
+  # compilar nada, y al desinstalar basta con borrarlo.
+  cat > "$SLOT_ADMIN/pterobackups.blade.php" <<'BLADEEOF'
+{{--
+    Entrada del menú de PteroBackups.
+
+    El @if NO sobra: si algún día se desinstala la extensión y este archivo se
+    queda aquí, route() lanzaría una excepción y el área de administración
+    ENTERA daría error 500. Comprobando antes que la ruta existe, lo peor que
+    puede pasar es que no salga el botón.
+--}}
+@if (Route::has('admin.pterobackups'))
+    <li class="header">BACKUPS</li>
+    <li class="{{ Route::currentRouteNamed('admin.pterobackups*') ? 'active' : '' }}">
+        <a href="{{ route('admin.pterobackups') }}">
+            <i data-lucide="archive"></i> <i class="fa fa-cloud-download"></i> <span>PteroBackups</span>
+        </a>
+    </li>
+@endif
+BLADEEOF
+  echo "    OK: botón 'PteroBackups' puesto en el hueco de admin del tema."
+elif [ ! -f "$ADMIN_LAYOUT" ]; then
   echo "    AVISO: no existe $ADMIN_LAYOUT (el menú de admin no se tocará)."
 elif grep -q 'PteroBackups NAV' "$ADMIN_LAYOUT"; then
   echo "    El botón de admin ya estaba en el menú."
 else
   NAV=$(cat <<'BLADEEOF'
                     {{-- PteroBackups NAV START (gestionado por extension/install.sh) --}}
+                    @if (Route::has('admin.pterobackups'))
                     <li class="{{ Route::currentRouteNamed('admin.pterobackups*') ? 'active' : '' }}">
                         <a href="{{ route('admin.pterobackups') }}">
-                            <i class="fa fa-cloud-download"></i> <span>PteroBackups</span>
+                            <i data-lucide="archive"></i> <i class="fa fa-cloud-download"></i> <span>PteroBackups</span>
                         </a>
                     </li>
+                    @endif
                     {{-- PteroBackups NAV END --}}
 BLADEEOF
 )
@@ -341,7 +415,9 @@ fi
 #     necesita recompilar). Solo tiene sentido si la página existe, o sea si
 #     el panel se llegó a compilar con la ruta dentro.
 # ---------------------------------------------------------------------------
-if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
+if [ "$USA_SLOT" -eq 1 ]; then
+  echo "    El tema recoge el botón de su hueco: no hace falta tocar su lista de enlaces."
+elif [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
   echo ""
   echo "==> Tema Arix detectado."
   if [ "$BUILD_OK" = "1" ]; then

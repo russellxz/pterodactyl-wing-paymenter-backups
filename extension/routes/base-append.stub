@@ -1,7 +1,6 @@
 
 // PteroBackups START (gestionado por extension/install.sh - no editar a mano)
 Route::group(['prefix' => 'pterobackups', 'middleware' => ['auth']], function () {
-    Route::get('/server/{short}', [\Pterodactyl\Http\Controllers\PteroBackups\ServerBackupsController::class, 'show']);
     Route::get('/server/{short}/list', [\Pterodactyl\Http\Controllers\PteroBackups\ServerBackupsController::class, 'list']);
     Route::get('/server/{short}/job', [\Pterodactyl\Http\Controllers\PteroBackups\ServerBackupsController::class, 'job']);
     Route::get('/server/{short}/download/{backup}', [\Pterodactyl\Http\Controllers\PteroBackups\ServerBackupsController::class, 'download']);

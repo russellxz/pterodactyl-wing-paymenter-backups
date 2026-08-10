@@ -31,17 +31,6 @@ class ServerBackupsController extends Controller
         return $server;
     }
 
-    public function show(Request $request, string $short)
-    {
-        $server = $this->findServer($request, $short);
-
-        return view('pterobackups.server', [
-            'server' => $server,
-            'short' => $short,
-            'configured' => Client::configured(),
-        ]);
-    }
-
     public function list(Request $request, string $short)
     {
         $server = $this->findServer($request, $short);

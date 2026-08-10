@@ -26,6 +26,37 @@
 # ============================================================================
 set -e
 
+SWAPFILE="/swapfile-pterobackups"
+
+# Quita la swap temporal que se crea para compilar, si se llegó a crear.
+cleanup_swap() {
+  if [ -f "$SWAPFILE" ]; then
+    swapoff "$SWAPFILE" 2>/dev/null || true
+    rm -f "$SWAPFILE"
+  fi
+}
+
+# Si algo peta donde no tocaba, que se vea DÓNDE en vez de morir en silencio
+# dejando el panel a medias. Es justo lo que pasó con la versión anterior: una
+# copia de una carpeta que ya no existía cortaba el instalador nada más borrar
+# el botón viejo, así que el botón desaparecía y no se veía el motivo.
+LINEA_ACTUAL="?"
+trap 'LINEA_ACTUAL=$LINENO' ERR
+al_salir() {
+  RC=$?
+  cleanup_swap
+  if [ "$RC" != "0" ] && [ "$TERMINADO" != "1" ]; then
+    echo ""
+    echo "    ============================================================="
+    echo "    EL INSTALADOR SE HA PARADO (código $RC, línea $LINEA_ACTUAL)."
+    echo "    ============================================================="
+    echo "    NO se ha desinstalado nada: lo que ya funcionaba sigue igual."
+    echo "    Manda estas líneas y se corrige."
+  fi
+}
+TERMINADO=0
+trap al_salir EXIT
+
 PANEL="/var/www/pterodactyl"
 DO_BUILD=1
 for arg in "$@"; do
@@ -67,22 +98,62 @@ fi
 # ---------------------------------------------------------------------------
 # 0b) Restos de instalaciones anteriores de ESTA extensión.
 #
-# Se quitan siempre antes de poner nada, para no acabar con el botón repetido.
+# OJO CON EL ORDEN. Aquí NO se borra ni el botón del menú de usuario ni el del
+# admin: los dos se reescriben enteros más abajo, en los pasos 3 y 4. Si se
+# borraran ahora y el instalador se parase por el motivo que fuera, el panel se
+# quedaría SIN el botón que ya tenía. Eso es exactamente lo que pasaba antes.
+#
+# Lo único que se limpia aquí son las marcas del menú del admin, porque esas sí
+# se acumulan si se instala dos veces seguidas.
 # ---------------------------------------------------------------------------
-rm -rf "$PANEL/resources/scripts/components/server/extensions/pterobackups"
-rm -f  "$PANEL/resources/views/admin/extensions/pterobackups.blade.php"
-
 if grep -q 'PteroBackups NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
   sed -i '/PteroBackups NAV START/,/PteroBackups NAV END/d' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null || true
 fi
 
 # ---------------------------------------------------------------------------
-# 1) Copiar archivos (controladores, vistas, estilos y componentes React)
+# 1) Copiar archivos (controladores, vistas y componentes React)
+#
+# Se copia SOLO lo que venga en el paquete. Una versión trae unas carpetas y
+# otra trae otras: la que quitó los archivos del inyector se quedó sin
+# panel/public y "cp" murió ahí mismo, cortando el instalador a mitad. Por eso
+# ahora se comprueba antes cada carpeta en vez de darla por hecha.
 # ---------------------------------------------------------------------------
-cp -r "$HERE/panel/app/." "$PANEL/app/"
-cp -r "$HERE/panel/resources/." "$PANEL/resources/"
-cp -r "$HERE/panel/public/." "$PANEL/public/"
-echo "    Archivos copiados."
+COPIADAS=0
+for CARPETA in app resources public; do
+  if [ -d "$HERE/panel/$CARPETA" ] && [ -n "$(ls -A "$HERE/panel/$CARPETA" 2>/dev/null)" ]; then
+    mkdir -p "$PANEL/$CARPETA"
+    cp -r "$HERE/panel/$CARPETA/." "$PANEL/$CARPETA/"
+    COPIADAS=$((COPIADAS + 1))
+  fi
+done
+
+if [ "$COPIADAS" -eq 0 ]; then
+  echo ""
+  echo "    ERROR: el paquete no trae la carpeta panel/ con los archivos."
+  echo "           ¿Se descomprimió entero? Debe verse así:"
+  echo "             extension/install.sh"
+  echo "             extension/panel/app/..."
+  echo "             extension/panel/resources/..."
+  exit 1
+fi
+
+# Los archivos que de verdad hacen falta. Si alguno no está, mejor parar aquí
+# que dejar el panel con la mitad puesta.
+for IMPRESCINDIBLE in \
+  "app/Http/Controllers/PteroBackups/ServerBackupsController.php" \
+  "app/Http/Controllers/PteroBackups/AdminController.php" \
+  "app/PteroBackups/Client.php" \
+  "resources/scripts/components/server/pterobackups/PteroBackupsContainer.tsx" \
+  "resources/views/admin/pterobackups/index.blade.php"; do
+  if [ ! -f "$PANEL/$IMPRESCINDIBLE" ]; then
+    echo ""
+    echo "    ERROR: falta $IMPRESCINDIBLE después de copiar."
+    echo "           El paquete está incompleto. No se toca nada más."
+    exit 1
+  fi
+done
+
+echo "    Archivos copiados y comprobados."
 
 # Restos de la versión anterior, que metía el botón con JavaScript.
 rm -f "$PANEL/public/pterobackups/inject.js" "$PANEL/public/pterobackups/admin-inject.js"
@@ -134,6 +205,11 @@ PATCHER="$HERE/tools/patch-routes.php"
 if [ "$USA_SLOT" -eq 1 ]; then
   # Con el hueco del tema basta con dejar la carpeta: el tema la recoge sola al
   # compilar y saca la página y el botón. No se toca routes.ts.
+  #
+  # Se vacía primero por si una versión anterior dejó ahí archivos con otro
+  # nombre; el route.tsx se escribe justo después, en el mismo paso, así que el
+  # botón nunca se queda sin él.
+  rm -rf "$SLOT_CLIENTE/pterobackups"
   mkdir -p "$SLOT_CLIENTE/pterobackups"
   cat > "$SLOT_CLIENTE/pterobackups/route.tsx" <<'TSXEOF'
 import PteroBackupsContainer from '@/components/server/pterobackups/PteroBackupsContainer';
@@ -146,6 +222,11 @@ export default {
     component: PteroBackupsContainer,
 };
 TSXEOF
+  if [ ! -s "$SLOT_CLIENTE/pterobackups/route.tsx" ]; then
+    echo "    ERROR: no se pudo escribir en $SLOT_CLIENTE/pterobackups/"
+    echo "           Revisa permisos. Sin ese archivo no sale el botón."
+    exit 1
+  fi
   echo "    OK: botón 'Backup 2.0' puesto en el hueco de extensiones del tema."
 elif [ ! -f "$ROUTES_TS" ]; then
   echo "    AVISO: no existe $ROUTES_TS."
@@ -239,7 +320,6 @@ BUILD_OK=0
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BUILD_LOG="$PANEL/storage/logs/pterobackups-build-$STAMP.log"
 ASSETS_BACKUP="$PANEL/storage/pterobackups-assets-$STAMP"
-SWAPFILE="/swapfile-pterobackups"
 
 # Deshace la entrada del menú de usuario, dejando routes.ts como estaba.
 # El patcher restaura desde la copia del original que guardó al instalar.
@@ -267,13 +347,6 @@ frontend_ok() {
   local total
   total=$(cat "$PANEL/public/assets/"*.js 2>/dev/null | wc -c)
   [ "${total:-0}" -gt 500000 ]
-}
-
-cleanup_swap() {
-  if [ -f "$SWAPFILE" ]; then
-    swapoff "$SWAPFILE" 2>/dev/null || true
-    rm -f "$SWAPFILE"
-  fi
 }
 
 if [ "$DO_BUILD" = "1" ]; then
@@ -323,7 +396,6 @@ if [ "$DO_BUILD" = "1" ]; then
     SWAP_TOTAL=${SWAP_TOTAL:-0}
     if [ "$MEM_FREE" -lt 2048 ] && [ "$SWAP_TOTAL" -lt 1024 ] && command -v fallocate >/dev/null 2>&1; then
       echo "    Poca memoria libre (${MEM_FREE} MB) y sin swap: creando swap temporal de 4 GB..."
-      trap cleanup_swap EXIT
       if fallocate -l 4G "$SWAPFILE" 2>/dev/null && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
         echo "    Swap temporal activada (se quita sola al terminar)."
         MEM_FREE=$((MEM_FREE + 4096))
@@ -372,6 +444,12 @@ if [ "$DO_BUILD" = "1" ]; then
       BUILD_OK=1
       cleanup_swap
       echo "    Panel recompilado y frontend verificado."
+      # La copia de seguridad ya no hace falta, y cada una ocupa lo que pese
+      # public/assets. Se guardan las 3 últimas por si acaso y se borran las
+      # viejas, para no ir llenando el disco a cada instalación.
+      ls -1dt "$PANEL/storage/pterobackups-assets-"* 2>/dev/null | tail -n +4 | while read -r VIEJA; do
+        rm -rf "$VIEJA"
+      done
     else
       cleanup_swap
       echo ""
@@ -401,11 +479,19 @@ if [ "$DO_BUILD" = "1" ]; then
       echo "    -------------------------------------------------------------"
       echo "    Registro completo: $BUILD_LOG"
       echo "    -------------------------------------------------------------"
-      # VUELTA ATRÁS: frontend y routes.ts como estaban. El panel NO se queda
-      # en blanco y el archivo queda idéntico al original.
+      # VUELTA ATRÁS: el frontend que había vuelve tal cual, así que el panel NO
+      # se queda en blanco.
       restore_assets
-      revert_routes_ts
-      echo "    Entrada de routes.ts retirada (el archivo queda como estaba)."
+      if [ "$USA_SLOT" -eq 1 ]; then
+        # Con el hueco del tema no se ha tocado ningún archivo del panel: el
+        # botón es una carpeta aparte. Se deja puesta para que salga en cuanto
+        # se compile bien, sin tener que reinstalar nada.
+        echo "    El botón está preparado y saldrá en cuanto compile. Reintenta con:"
+        echo "      cd $PANEL && yarn build:production"
+      else
+        revert_routes_ts
+        echo "    Entrada de routes.ts retirada (el archivo queda como estaba)."
+      fi
       echo "    El área de admin y la página siguen instaladas y funcionando."
       echo "    ============================================================="
     fi
@@ -413,10 +499,16 @@ if [ "$DO_BUILD" = "1" ]; then
 else
   echo ""
   echo "    Recompilación omitida (--no-build)."
-  revert_routes_ts
-  echo "    La entrada de routes.ts se ha quitado para no dejar el panel a medias."
-  echo "    El área de admin funciona ya. Para el botón del menú de usuario,"
-  echo "    vuelve a ejecutar el instalador SIN --no-build."
+  if [ "$USA_SLOT" -eq 1 ]; then
+    echo "    El botón del menú de usuario ya está preparado, pero no saldrá"
+    echo "    hasta que compiles:"
+    echo "      cd $PANEL && yarn build:production"
+  else
+    revert_routes_ts
+    echo "    La entrada de routes.ts se ha quitado para no dejar el panel a medias."
+    echo "    El área de admin funciona ya. Para el botón del menú de usuario,"
+    echo "    vuelve a ejecutar el instalador SIN --no-build."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -426,6 +518,16 @@ fi
 #     el panel se llegó a compilar con la ruta dentro.
 # ---------------------------------------------------------------------------
 if [ "$USA_SLOT" -eq 1 ]; then
+  # Con el hueco, el botón sale del hueco. Si además quedó apuntado en la lista
+  # de enlaces de Arix de una instalación anterior, habría DOS fuentes para el
+  # mismo botón: o sale repetido, o el tema se queda con el de la lista y el
+  # del hueco no se pinta. Se quita el de la lista para que solo haya una.
+  if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
+    if (cd "$PANEL" && php artisan pterobackups:arix-link --status) >/dev/null 2>&1; then
+      (cd "$PANEL" && php artisan pterobackups:arix-link --remove) >/dev/null 2>&1 \
+        && echo "    Quitada la entrada vieja de la lista de enlaces de Arix (ya sobra)."
+    fi
+  fi
   echo "    El tema recoge el botón de su hueco: no hace falta tocar su lista de enlaces."
 elif [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
   echo ""
@@ -450,9 +552,60 @@ php artisan config:clear >/dev/null 2>&1 || true
 COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload -o >/dev/null 2>&1 || true
 chown -R www-data:www-data "$PANEL/app" "$PANEL/resources" "$PANEL/public" 2>/dev/null || true
 
+# ---------------------------------------------------------------------------
+# 7) COMPROBACIÓN FINAL DEL BOTÓN
+#
+# Antes el instalador terminaba diciendo "instalada correctamente" aunque el
+# botón no hubiese llegado a ninguna parte. Ahora se mira de verdad: primero
+# que el archivo del botón esté puesto, y luego que haya acabado DENTRO del
+# frontend compilado. Si no está, se dice claramente y con qué arreglarlo.
+# ---------------------------------------------------------------------------
+BOTON_OK=0
+BOTON_MOTIVO=""
+BOTON_ARREGLO="cd $PANEL && yarn build:production"
+
+if [ "$USA_SLOT" -eq 1 ]; then
+  if [ ! -s "$SLOT_CLIENTE/pterobackups/route.tsx" ]; then
+    BOTON_MOTIVO="no se llegó a crear el archivo del botón"
+    BOTON_ARREGLO="sudo bash $HERE/install.sh $PANEL"
+  elif [ "$DO_BUILD" != "1" ]; then
+    BOTON_MOTIVO="falta compilar el panel (usaste --no-build)"
+  elif [ "$BUILD_OK" != "1" ]; then
+    BOTON_MOTIVO="la recompilación no terminó bien (mira el registro de arriba)"
+  elif grep -rlq "Backup 2\.0" "$PANEL/public/assets/" 2>/dev/null; then
+    BOTON_OK=1
+  else
+    BOTON_MOTIVO="compiló, pero el botón no aparece dentro del frontend"
+  fi
+elif [ "$BUILD_OK" = "1" ] && grep -rlq "Backup 2\.0" "$PANEL/public/assets/" 2>/dev/null; then
+  BOTON_OK=1
+elif [ "$DO_BUILD" != "1" ]; then
+  # Sin el hueco del tema, --no-build deja routes.ts como estaba a propósito,
+  # así que compilar por tu cuenta no bastaría: hay que repetir el instalador.
+  BOTON_MOTIVO="usaste --no-build, y sin el hueco del tema eso deshace la entrada"
+  BOTON_ARREGLO="sudo bash $HERE/install.sh $PANEL"
+else
+  BOTON_MOTIVO="la recompilación no terminó bien (mira el registro de arriba)"
+  BOTON_ARREGLO="sudo bash $HERE/install.sh $PANEL"
+fi
+
+TERMINADO=1
+
 echo ""
 echo "=========================================================="
-echo " Extensión PteroBackups instalada correctamente."
+echo " Extensión PteroBackups instalada."
+echo ""
+if [ "$BOTON_OK" = "1" ]; then
+  echo " Botón 'Backup 2.0' del área de cliente:  PUESTO Y COMPILADO"
+  echo " (si no lo ves, recarga con Ctrl+F5: es la caché del navegador)"
+else
+  echo " Botón 'Backup 2.0' del área de cliente:  TODAVÍA NO SALE"
+  echo "   Motivo: $BOTON_MOTIVO"
+  echo "   Para terminarlo:"
+  echo "     $BOTON_ARREGLO"
+  echo "   Y comprueba cómo quedó con:"
+  echo "     sudo bash $HERE/check.sh $PANEL"
+fi
 echo ""
 echo " Siguientes pasos:"
 echo "  1. Entra a  https://TU-PANEL/admin/pterobackups"
@@ -461,5 +614,6 @@ echo "  2. Pega la URL del sistema de copias y la clave de API."
 echo "     Ambos están en el sistema: Configuración -> Extensión del panel."
 echo "  3. Guarda: la conexión se prueba automáticamente."
 echo ""
-echo " Los usuarios verán 'Backup 2.0' en el menú de su servidor."
+echo " Para desinstalarla del todo:"
+echo "     sudo bash $HERE/uninstall.sh $PANEL"
 echo "=========================================================="

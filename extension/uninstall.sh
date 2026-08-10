@@ -19,9 +19,14 @@ fi
 
 echo "==> Desinstalando la extensión PteroBackups de: $PANEL"
 
-# Botón del menú de Arix (vive en la base de datos, no en un archivo)
-if [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; then
-  (cd "$PANEL" && php artisan pterobackups:arix-link --remove) 2>/dev/null || true
+# Botón del menú de Arix.
+#
+# Solo hace falta si el botón se puso en la lista de enlaces del tema (la que
+# vive en la base de datos). Con el hueco de extensiones no se usa esa lista,
+# asi que ni se toca: el archivo del hueco se borra mas abajo y ya esta.
+if [ ! -d "$PANEL/resources/scripts/components/server/extensions/pterobackups" ] \
+   && { [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ] || [ -f "$PANEL/config/arixTheme.php" ]; }; then
+  (cd "$PANEL" && php artisan pterobackups:arix-link --remove) >/dev/null 2>&1 || true
 fi
 
 # Revertir el ajuste de la ruta comodín de React

@@ -94,19 +94,27 @@ if [ ! -f "$ROUTES_TS" ]; then
 elif grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
   echo "    El botón de usuario ya estaba registrado en routes.ts."
 else
-  # Dos inserciones en una pasada:
+  # Dos inserciones en una pasada, cada una entre marcas para poder quitarlas
+  # después dejando el archivo BYTE A BYTE como estaba:
   #   - el import, delante del primero que haya (en TS el orden da igual)
   #   - la entrada del menú, al final del array de rutas del servidor. Ese
   #     array es el último que se cierra en el archivo, así que va justo
   #     delante de su "]," final.
-  IMPORT="import PteroBackupsContainer from '@/components/server/pterobackups/PteroBackupsContainer';"
+  IMPORT=$(cat <<'TSEOF'
+// PteroBackups START
+import PteroBackupsContainer from '@/components/server/pterobackups/PteroBackupsContainer';
+// PteroBackups END
+TSEOF
+)
   ENTRY=$(cat <<'TSEOF'
+        // PteroBackups START
         {
             path: '/pterobackups',
             permission: 'backup.*',
             name: 'Backup 2.0',
             component: PteroBackupsContainer,
         },
+        // PteroBackups END
 TSEOF
 )
   awk -v imp="$IMPORT" -v block="$ENTRY" '
@@ -172,7 +180,44 @@ fi
 # 5) Recompilar el panel (solo por el botón del área de usuario)
 # ---------------------------------------------------------------------------
 BUILD_OK=0
-BUILD_LOG="/tmp/pterobackups-build.log"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BUILD_LOG="$PANEL/storage/logs/pterobackups-build-$STAMP.log"
+ASSETS_BACKUP="$PANEL/storage/pterobackups-assets-$STAMP"
+SWAPFILE="/swapfile-pterobackups"
+
+# Deshace la entrada del menú de usuario, dejando routes.ts como estaba.
+revert_routes_ts() {
+  [ -f "$ROUTES_TS" ] || return 0
+  sed -i '/\/\/ PteroBackups START/,/\/\/ PteroBackups END/d' "$ROUTES_TS"
+}
+
+# Devuelve el frontend que había antes de compilar.
+restore_assets() {
+  if [ -d "$ASSETS_BACKUP/assets" ]; then
+    rm -rf "$PANEL/public/assets"
+    cp -a "$ASSETS_BACKUP/assets" "$PANEL/public/assets"
+    chown -R www-data:www-data "$PANEL/public/assets" 2>/dev/null || true
+    echo "    Frontend anterior restaurado: el panel sigue funcionando."
+  fi
+}
+
+# El build puede terminar con código 0 y no haber generado nada, así que no
+# basta con mirar el código de salida: hay que comprobar que el bundle está.
+frontend_ok() {
+  ls "$PANEL/public/assets/bundle."*.js >/dev/null 2>&1 && return 0
+  # Por si un tema cambia el nombre del bundle: al menos un .js con tamaño real.
+  local total
+  total=$(cat "$PANEL/public/assets/"*.js 2>/dev/null | wc -c)
+  [ "${total:-0}" -gt 500000 ]
+}
+
+cleanup_swap() {
+  if [ -f "$SWAPFILE" ]; then
+    swapoff "$SWAPFILE" 2>/dev/null || true
+    rm -f "$SWAPFILE"
+  fi
+}
+
 if [ "$DO_BUILD" = "1" ]; then
   if ! command -v yarn >/dev/null 2>&1; then
     echo ""
@@ -181,38 +226,104 @@ if [ "$DO_BUILD" = "1" ]; then
     echo "           menú de los usuarios, instala yarn y recompila:"
     echo "             npm install -g yarn"
     echo "             cd $PANEL && yarn && yarn build:production"
+    revert_routes_ts
+    echo "    (La entrada de routes.ts se ha quitado para no dejarla a medias.)"
   else
     echo ""
-    echo "==> Recompilando el panel (tarda varios minutos, no lo interrumpas)..."
-    cd "$PANEL"
-    # Si el build falla NO abortamos la instalación: el área de admin y las
-    # rutas ya funcionan. Guardamos la salida entera para poder diagnosticarlo.
-    # Ojo con el "| tee": el estado de una tubería es el del ÚLTIMO comando
-    # (tee, que siempre va bien), así que hay que mirar PIPESTATUS.
-    set +e
-    { yarn install --network-timeout 600000 && yarn build:production; } 2>&1 | tee "$BUILD_LOG"
-    BUILD_RC=${PIPESTATUS[0]}
-    set -e
-    if [ "$BUILD_RC" = "0" ]; then
-      BUILD_OK=1
-      echo "    Panel recompilado."
+    echo "==> Preparando la recompilación..."
+
+    # 1) RED DE SEGURIDAD: copia del frontend actual. "yarn build:production"
+    #    ejecuta antes "yarn run clean", que BORRA public/assets/*.js. Si el
+    #    build falla después, el panel se queda en blanco. Con esta copia lo
+    #    devolvemos tal cual estaba.
+    if [ -d "$PANEL/public/assets" ]; then
+      mkdir -p "$ASSETS_BACKUP"
+      cp -a "$PANEL/public/assets" "$ASSETS_BACKUP/assets"
+      echo "    Copia del frontend actual guardada en: $ASSETS_BACKUP"
     else
+      echo "    AVISO: no existe public/assets (¿el panel nunca se compiló?)."
+    fi
+
+    # 2) Memoria: compilar el panel pide unos 2 GB. Si node intenta usar más
+    #    de la que hay libre, el sistema lo mata y solo se ve "exit code 1".
+    MEM_FREE=$(free -m 2>/dev/null | awk '/^Mem:/ {print ($7 != "" && $7 != 0 ? $7 : $4)}')
+    MEM_FREE=${MEM_FREE:-2048}
+    SWAP_TOTAL=$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}')
+    SWAP_TOTAL=${SWAP_TOTAL:-0}
+    if [ "$MEM_FREE" -lt 2048 ] && [ "$SWAP_TOTAL" -lt 1024 ] && command -v fallocate >/dev/null 2>&1; then
+      echo "    Poca memoria libre (${MEM_FREE} MB) y sin swap: creando swap temporal de 4 GB..."
+      trap cleanup_swap EXIT
+      if fallocate -l 4G "$SWAPFILE" 2>/dev/null && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
+        echo "    Swap temporal activada (se quita sola al terminar)."
+        MEM_FREE=$((MEM_FREE + 4096))
+      else
+        cleanup_swap
+        echo "    No se pudo crear la swap; se sigue igualmente."
+      fi
+    fi
+    NODE_MEM=$((MEM_FREE * 75 / 100))
+    [ "$NODE_MEM" -lt 1024 ] && NODE_MEM=1024
+    [ "$NODE_MEM" -gt 4096 ] && NODE_MEM=4096
+    echo "    Memoria para node: ${NODE_MEM} MB (libre: ${MEM_FREE} MB)"
+
+    echo "==> Recompilando el panel (tarda varios minutos, no lo interrumpas)..."
+    mkdir -p "$(dirname "$BUILD_LOG")"
+    cd "$PANEL"
+    set +e
+    NODE_OPTIONS="--max-old-space-size=$NODE_MEM" \
+      sh -c 'yarn install --network-timeout 600000 && yarn build:production' > "$BUILD_LOG" 2>&1
+    BUILD_RC=$?
+    set -e
+
+    if [ "$BUILD_RC" = "0" ] && frontend_ok; then
+      BUILD_OK=1
+      cleanup_swap
+      echo "    Panel recompilado y frontend verificado."
+    else
+      cleanup_swap
       echo ""
+      echo "    ============================================================="
+      if [ "$BUILD_RC" = "0" ]; then
+        echo "    EL BUILD DIJO QUE SÍ, PERO NO GENERÓ FRONTEND."
+      else
+        echo "    LA RECOMPILACIÓN FALLÓ (código $BUILD_RC)."
+      fi
+      echo "    ============================================================="
+      # Diagnóstico legible: primero las causas típicas, luego el error real
+      # sin el ruido de Browserslist / Tailwind / DeprecationWarning.
+      if grep -qiE "heap out of memory|Allocation failed|Killed|JavaScript heap" "$BUILD_LOG"; then
+        echo "    CAUSA: se quedó SIN MEMORIA."
+        echo "    Solución: añade swap y vuelve a ejecutar el instalador:"
+        echo "      fallocate -l 4G /swapfile && chmod 600 /swapfile && \\"
+        echo "        mkswap /swapfile && swapon /swapfile && \\"
+        echo "        echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+      elif grep -q "ERROR in" "$BUILD_LOG"; then
+        echo "    Errores de compilación encontrados:"
+        grep -A3 "ERROR in" "$BUILD_LOG" | head -n 30 | sed 's/^/      /'
+      else
+        echo "    Últimas líneas del registro:"
+        grep -viE "Browserslist|caniuse|tailwindcss|DeprecationWarning|warning |^warn |funding|npm notice" "$BUILD_LOG" \
+          | tail -n 20 | sed 's/^/      /'
+      fi
       echo "    -------------------------------------------------------------"
-      echo "    LA RECOMPILACIÓN FALLÓ. El resto de la extensión SÍ se instaló."
-      echo "    Últimas líneas del error:"
+      echo "    Registro completo: $BUILD_LOG"
       echo "    -------------------------------------------------------------"
-      grep -iE "error|ERROR in|Module not found|TS[0-9]{4}|heap out of memory" "$BUILD_LOG" | tail -n 20 | sed 's/^/      /'
-      echo "    -------------------------------------------------------------"
-      echo "    Registro completo en: $BUILD_LOG"
-      echo "    Mándamelo si quieres que lo revise."
-      echo "    -------------------------------------------------------------"
+      # VUELTA ATRÁS: frontend y routes.ts como estaban. El panel NO se queda
+      # en blanco y el archivo queda idéntico al original.
+      restore_assets
+      revert_routes_ts
+      echo "    Entrada de routes.ts retirada (el archivo queda como estaba)."
+      echo "    El área de admin y la página siguen instaladas y funcionando."
+      echo "    ============================================================="
     fi
   fi
 else
   echo ""
-  echo "    (Recompilación omitida. El botón del menú de usuario aparecerá"
-  echo "     cuando ejecutes:  cd $PANEL && yarn && yarn build:production)"
+  echo "    Recompilación omitida (--no-build)."
+  revert_routes_ts
+  echo "    La entrada de routes.ts se ha quitado para no dejar el panel a medias."
+  echo "    El área de admin funciona ya. Para el botón del menú de usuario,"
+  echo "    vuelve a ejecutar el instalador SIN --no-build."
 fi
 
 # ---------------------------------------------------------------------------

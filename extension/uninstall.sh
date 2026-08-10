@@ -38,35 +38,48 @@ if [ -f "$ADMIN_LAYOUT" ]; then
   echo "    Botón del menú de admin retirado."
 fi
 
-# Quitar el botón del menú de usuario (entrada nativa en routes.ts)
+# Quitar el botón del menú de usuario (entrada nativa en routes.ts).
+# Las inserciones van entre marcas, así que borrarlas deja el archivo BYTE A
+# BYTE como estaba antes de instalar.
 ROUTES_TS="$PANEL/resources/scripts/routers/routes.ts"
 NEEDS_BUILD=0
+if [ -f "$ROUTES_TS" ] && grep -q 'PteroBackups START' "$ROUTES_TS"; then
+  sed -i '/\/\/ PteroBackups START/,/\/\/ PteroBackups END/d' "$ROUTES_TS"
+  echo "    Entrada del menú de usuario retirada de routes.ts."
+  NEEDS_BUILD=1
+fi
+# Versión antigua sin marcas (por si se instaló con un install.sh anterior).
 if [ -f "$ROUTES_TS" ] && grep -q 'PteroBackupsContainer' "$ROUTES_TS"; then
-  # El import y el bloque de la ruta (5 líneas desde el "path: '/pterobackups'"
-  # hasta su cierre, más la llave de apertura anterior).
   sed -i "\#components/server/pterobackups/PteroBackupsContainer#d" "$ROUTES_TS"
   awk '
     { lines[NR] = $0 }
     END {
       for (i = 1; i <= NR; i++) {
         if (lines[i] ~ /path: .\/pterobackups./) {
-          # Borramos hacia atrás la llave de apertura del bloque...
           for (j = i - 1; j >= 1; j--) { if (lines[j] ~ /^[[:space:]]*\{[[:space:]]*$/) { skipFrom = j; break } }
-          # ...y hacia delante hasta su cierre.
           for (k = i; k <= NR; k++) { if (lines[k] ~ /^[[:space:]]*\},[[:space:]]*$/) { skipTo = k; break } }
         }
       }
       for (i = 1; i <= NR; i++) if (i < skipFrom || i > skipTo) print lines[i]
     }
   ' "$ROUTES_TS" > "$ROUTES_TS.pbtmp" && mv "$ROUTES_TS.pbtmp" "$ROUTES_TS"
-  echo "    Entrada del menú de usuario retirada de routes.ts."
+  echo "    Entrada antigua (sin marcas) retirada de routes.ts."
   NEEDS_BUILD=1
 fi
 
-# Restos de la versión antigua, que metía el botón con JavaScript
+# Restos de la versión antigua, que metía el botón con JavaScript inyectado
+# en TODAS las plantillas del panel. Se limpian una por una.
 for FILE in $(grep -rl 'pterobackups/inject.js\|pterobackups/admin-inject.js' "$PANEL/resources/views" 2>/dev/null || true); do
   sed -i '\#pterobackups/inject.js#d;\#pterobackups/admin-inject.js#d' "$FILE" 2>/dev/null || true
+  echo "    Script inyectado retirado de $(basename "$FILE")"
 done
+
+# Por si quedaron varios bloques del menú de admin de instalaciones repetidas,
+# el borrado por marcas de arriba ya los quita todos. Comprobamos que no queda.
+if grep -q 'pterobackups' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+  echo "    AVISO: queda alguna referencia suelta en admin.blade.php:"
+  grep -n 'pterobackups' "$PANEL/resources/views/layouts/admin.blade.php" | sed 's/^/      /'
+fi
 
 # Quitar archivos
 rm -rf "$PANEL/app/Http/Controllers/PteroBackups" \

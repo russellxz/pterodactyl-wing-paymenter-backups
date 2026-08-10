@@ -29,6 +29,16 @@ cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash uninstall.sh
 cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash check.sh
 ```
 
+### Reintentar solo el botón del cliente
+
+Si la extensión ya está puesta y el admin funciona, pero el botón "Backup 2.0" no sale porque la compilación falló:
+
+```bash
+cd /opt/pterodactyl-wing-paymenter-backups/extension && sudo bash install-frontend.sh
+```
+
+No vuelve a copiar archivos ni a tocar rutas: solo rehace el botón y recompila. Es lo mismo que `sudo bash install.sh --solo-frontend`.
+
 > Si tu panel **no** está en `/var/www/pterodactyl`, pásale la ruta a cualquiera de los tres:
 > `sudo bash install.sh /ruta/de/tu/panel`
 
@@ -164,6 +174,18 @@ Te dice, punto por punto, si el archivo del botón está puesto, si el botón es
 - **"No se pudo conectar" al guardar:** comprueba que la URL del sistema abre en el navegador y que la clave es la de **Configuración → Extensión del panel** (sin espacios). Si regeneraste la clave en el sistema, pégala de nuevo aquí.
 - **Los usuarios ven la página pero sin copias:** es normal si su servidor aún no tiene copias; se crean con la programación o con copias manuales.
 - **El instalador se para con un error:** te dice la línea exacta y el código. **No desinstala nada**: lo que ya funcionaba se queda funcionando. Manda esas líneas.
+- **`error Command failed with exit code 1` al compilar:** es webpack, no la extensión. Casi siempre es **falta de memoria** o **disco lleno**. El instalador ya añade swap temporal de 4 GB cuando hay menos de 2,2 GB de RAM libre, y te dice la causa. Si aun así falla, manda el registro completo:
+
+  ```bash
+  ls -t /var/www/pterodactyl/storage/logs/pterobackups-build-*.log | head -1 | xargs tail -60
+  free -m && df -h /var/www/pterodactyl
+  ```
+
+  Después de arreglar la memoria o el disco, no hace falta reinstalar entero:
+
+  ```bash
+  sudo bash install-frontend.sh
+  ```
 
 ---
 

@@ -25,6 +25,16 @@
 # ============================================================================
 set -e
 
+SWAPFILE="/swapfile-pterobackups"
+
+# Quita la swap temporal que se crea para recompilar, si se llegó a crear.
+cleanup_swap() {
+  if [ -f "$SWAPFILE" ]; then
+    swapoff "$SWAPFILE" 2>/dev/null || true
+    rm -f "$SWAPFILE"
+  fi
+}
+
 PANEL="/var/www/pterodactyl"
 DO_BUILD=1
 for arg in "$@"; do
@@ -44,7 +54,7 @@ fi
 TERMINADO=0
 LINEA_ACTUAL="?"
 trap 'LINEA_ACTUAL=$LINENO' ERR
-trap 'RC=$?; if [ "$RC" != "0" ] && [ "$TERMINADO" != "1" ]; then
+trap 'RC=$?; cleanup_swap; if [ "$RC" != "0" ] && [ "$TERMINADO" != "1" ]; then
   echo ""
   echo "    ============================================================="
   echo "    EL DESINSTALADOR SE HA PARADO (código '"'"'$RC'"'"', línea '"'"'$LINEA_ACTUAL'"'"')."
@@ -215,10 +225,30 @@ else
     cp -a "$PANEL/public/assets" "$ASSETS_BACKUP/assets"
   fi
 
+  # Mismos umbrales que el instalador: con poca RAM se añade swap temporal,
+  # con "dd" si "fallocate" no va. Sin esto, desinstalar en una máquina justa
+  # de memoria dejaba el panel sin frontend. La swap se quita sola al salir
+  # (cleanup_swap), pase lo que pase con la compilación.
   MEM_FREE=$(free -m 2>/dev/null | awk '/^Mem:/ {print ($7 != "" && $7 != 0 ? $7 : $4)}')
   MEM_FREE=${MEM_FREE:-2048}
+  SWAP_TOTAL=$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}')
+  SWAP_TOTAL=${SWAP_TOTAL:-0}
+
+  if [ "$MEM_FREE" -lt 2200 ] && [ "$SWAP_TOTAL" -lt 2000 ] \
+     && command -v mkswap >/dev/null 2>&1 && [ ! -e "$SWAPFILE" ]; then
+    echo "    Solo hay ${MEM_FREE} MB de RAM libre: se añade swap temporal de 4 GB."
+    if (fallocate -l 4G "$SWAPFILE" 2>/dev/null || dd if=/dev/zero of="$SWAPFILE" bs=1M count=4096 status=none 2>/dev/null) \
+       && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
+      echo "    Swap temporal activada (se quita sola al terminar)."
+      MEM_FREE=$((MEM_FREE + 4096))
+    else
+      cleanup_swap
+      echo "    No se pudo crear la swap (¿contenedor?). Se compila con lo que hay."
+    fi
+  fi
+
   NODE_MEM=$((MEM_FREE * 75 / 100))
-  [ "$NODE_MEM" -lt 1024 ] && NODE_MEM=1024
+  [ "$NODE_MEM" -lt 1536 ] && NODE_MEM=1536
   [ "$NODE_MEM" -gt 4096 ] && NODE_MEM=4096
 
   echo ""

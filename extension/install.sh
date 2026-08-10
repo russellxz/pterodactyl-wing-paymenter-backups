@@ -18,11 +18,16 @@
 # por un bot y le mostrara su pantalla de comprobación. Con el método nativo
 # no se ejecuta ni una línea de JavaScript extra.
 #
-# Uso:   sudo bash install.sh [/ruta/del/panel] [--no-build]
+# Uso:   sudo bash install.sh [/ruta/del/panel] [--no-build] [--solo-frontend]
 #        (por defecto usa /var/www/pterodactyl)
-#        --no-build  ->  no recompila el panel (útil si prefieres hacerlo tú;
-#                        el botón del área de usuario no saldrá hasta que
-#                        ejecutes "yarn build:production" en el panel)
+#
+#        --no-build       no recompila el panel (útil si prefieres hacerlo tú;
+#                         el botón del área de usuario no saldrá hasta que
+#                         ejecutes "yarn build:production" en el panel)
+#        --solo-frontend  rehace SOLO el botón del cliente y recompila, sin
+#                         volver a copiar archivos ni tocar rutas. Para
+#                         reintentar cuando la compilación falló. Es lo que
+#                         hace install-frontend.sh.
 # ============================================================================
 set -e
 
@@ -59,9 +64,14 @@ trap al_salir EXIT
 
 PANEL="/var/www/pterodactyl"
 DO_BUILD=1
+SOLO_FRONTEND=0
 for arg in "$@"; do
   case "$arg" in
     --no-build) DO_BUILD=0 ;;
+    # Rehacer SOLO el botón del cliente y recompilar, sin volver a tocar
+    # archivos ni rutas. Es lo que usa install-frontend.sh: si la compilación
+    # falla, se reintenta esto y ya, en vez de repetir la instalación entera.
+    --solo-frontend) SOLO_FRONTEND=1 ;;
     *) PANEL="$arg" ;;
   esac
 done
@@ -118,42 +128,54 @@ fi
 # panel/public y "cp" murió ahí mismo, cortando el instalador a mitad. Por eso
 # ahora se comprueba antes cada carpeta en vez de darla por hecha.
 # ---------------------------------------------------------------------------
-COPIADAS=0
-for CARPETA in app resources public; do
-  if [ -d "$HERE/panel/$CARPETA" ] && [ -n "$(ls -A "$HERE/panel/$CARPETA" 2>/dev/null)" ]; then
-    mkdir -p "$PANEL/$CARPETA"
-    cp -r "$HERE/panel/$CARPETA/." "$PANEL/$CARPETA/"
-    COPIADAS=$((COPIADAS + 1))
-  fi
-done
-
-if [ "$COPIADAS" -eq 0 ]; then
-  echo ""
-  echo "    ERROR: el paquete no trae la carpeta panel/ con los archivos."
-  echo "           ¿Se descomprimió entero? Debe verse así:"
-  echo "             extension/install.sh"
-  echo "             extension/panel/app/..."
-  echo "             extension/panel/resources/..."
-  exit 1
-fi
-
-# Los archivos que de verdad hacen falta. Si alguno no está, mejor parar aquí
-# que dejar el panel con la mitad puesta.
-for IMPRESCINDIBLE in \
-  "app/Http/Controllers/PteroBackups/ServerBackupsController.php" \
-  "app/Http/Controllers/PteroBackups/AdminController.php" \
-  "app/PteroBackups/Client.php" \
-  "resources/scripts/components/server/pterobackups/PteroBackupsContainer.tsx" \
-  "resources/views/admin/pterobackups/index.blade.php"; do
-  if [ ! -f "$PANEL/$IMPRESCINDIBLE" ]; then
+if [ "$SOLO_FRONTEND" = "1" ]; then
+  # Modo "solo el botón": los archivos ya tienen que estar puestos.
+  if [ ! -f "$PANEL/resources/scripts/components/server/pterobackups/PteroBackupsContainer.tsx" ]; then
     echo ""
-    echo "    ERROR: falta $IMPRESCINDIBLE después de copiar."
-    echo "           El paquete está incompleto. No se toca nada más."
+    echo "    ERROR: la extensión no está instalada en este panel."
+    echo "           Lanza primero la instalación completa:"
+    echo "             sudo bash $HERE/install.sh $PANEL"
     exit 1
   fi
-done
+  echo "    Solo se rehará el botón del cliente y se recompilará."
+else
+  COPIADAS=0
+  for CARPETA in app resources public; do
+    if [ -d "$HERE/panel/$CARPETA" ] && [ -n "$(ls -A "$HERE/panel/$CARPETA" 2>/dev/null)" ]; then
+      mkdir -p "$PANEL/$CARPETA"
+      cp -r "$HERE/panel/$CARPETA/." "$PANEL/$CARPETA/"
+      COPIADAS=$((COPIADAS + 1))
+    fi
+  done
 
-echo "    Archivos copiados y comprobados."
+  if [ "$COPIADAS" -eq 0 ]; then
+    echo ""
+    echo "    ERROR: el paquete no trae la carpeta panel/ con los archivos."
+    echo "           ¿Se descomprimió entero? Debe verse así:"
+    echo "             extension/install.sh"
+    echo "             extension/panel/app/..."
+    echo "             extension/panel/resources/..."
+    exit 1
+  fi
+
+  # Los archivos que de verdad hacen falta. Si alguno no está, mejor parar aquí
+  # que dejar el panel con la mitad puesta.
+  for IMPRESCINDIBLE in \
+    "app/Http/Controllers/PteroBackups/ServerBackupsController.php" \
+    "app/Http/Controllers/PteroBackups/AdminController.php" \
+    "app/PteroBackups/Client.php" \
+    "resources/scripts/components/server/pterobackups/PteroBackupsContainer.tsx" \
+    "resources/views/admin/pterobackups/index.blade.php"; do
+    if [ ! -f "$PANEL/$IMPRESCINDIBLE" ]; then
+      echo ""
+      echo "    ERROR: falta $IMPRESCINDIBLE después de copiar."
+      echo "           El paquete está incompleto. No se toca nada más."
+      exit 1
+    fi
+  done
+
+  echo "    Archivos copiados y comprobados."
+fi
 
 # Restos de la versión anterior, que metía el botón con JavaScript.
 rm -f "$PANEL/public/pterobackups/inject.js" "$PANEL/public/pterobackups/admin-inject.js"
@@ -175,6 +197,7 @@ done
 # ---------------------------------------------------------------------------
 # 2) Rutas de la extensión (solo si no estaban ya)
 # ---------------------------------------------------------------------------
+if [ "$SOLO_FRONTEND" != "1" ]; then
 if ! grep -q 'PteroBackups START' "$PANEL/routes/base.php"; then
   cat "$HERE/routes/base-append.stub" >> "$PANEL/routes/base.php"
   echo "    Rutas de usuario agregadas a routes/base.php"
@@ -194,6 +217,8 @@ elif grep -q 'api|auth|admin|daemon' "$PANEL/routes/base.php"; then
   echo "    OK: ruta comodín de React ajustada para dejar pasar /pterobackups."
 else
   echo "    AVISO: no se encontró la ruta comodín de React en routes/base.php."
+fi
+
 fi
 
 # ---------------------------------------------------------------------------
@@ -256,6 +281,7 @@ fi
 # 4) Botón del ÁREA DE ADMIN: <li> nativo en la plantilla Blade
 #    (esta parte del panel no es React, así que no hay que recompilar nada)
 # ---------------------------------------------------------------------------
+if [ "$SOLO_FRONTEND" != "1" ]; then
 ADMIN_LAYOUT="$PANEL/resources/views/layouts/admin.blade.php"
 
 if [ -d "$SLOT_ADMIN" ]; then
@@ -311,6 +337,8 @@ BLADEEOF
     echo "    AVISO: no se encontró la entrada 'Nodes' en el menú de admin."
     echo "           Entra directamente a  https://TU-PANEL/admin/pterobackups"
   fi
+fi
+
 fi
 
 # ---------------------------------------------------------------------------
@@ -390,24 +418,43 @@ if [ "$DO_BUILD" = "1" ]; then
 
     # 2) Memoria: compilar el panel pide unos 2 GB. Si node intenta usar más
     #    de la que hay libre, el sistema lo mata y solo se ve "exit code 1".
+    # Mismos umbrales que usa DNS Reverse, que es la que compila bien en tu
+    # servidor: se añade swap en cuanto hay menos de 2200 MB libres y menos de
+    # 2000 MB de swap, y si "fallocate" no funciona (pasa en algunos VPS y en
+    # contenedores) se cae a "dd", que funciona en todas partes.
     MEM_FREE=$(free -m 2>/dev/null | awk '/^Mem:/ {print ($7 != "" && $7 != 0 ? $7 : $4)}')
     MEM_FREE=${MEM_FREE:-2048}
     SWAP_TOTAL=$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}')
     SWAP_TOTAL=${SWAP_TOTAL:-0}
-    if [ "$MEM_FREE" -lt 2048 ] && [ "$SWAP_TOTAL" -lt 1024 ] && command -v fallocate >/dev/null 2>&1; then
-      echo "    Poca memoria libre (${MEM_FREE} MB) y sin swap: creando swap temporal de 4 GB..."
-      if fallocate -l 4G "$SWAPFILE" 2>/dev/null && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
+
+    if [ "$MEM_FREE" -lt 2200 ] && [ "$SWAP_TOTAL" -lt 2000 ] \
+       && [ "${PTEROBACKUPS_SIN_SWAP:-0}" != "1" ] \
+       && command -v mkswap >/dev/null 2>&1 && [ ! -e "$SWAPFILE" ]; then
+      echo "    Solo hay ${MEM_FREE} MB de RAM libre: se añade swap temporal de 4 GB."
+      if (fallocate -l 4G "$SWAPFILE" 2>/dev/null || dd if=/dev/zero of="$SWAPFILE" bs=1M count=4096 status=none 2>/dev/null) \
+         && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
         echo "    Swap temporal activada (se quita sola al terminar)."
         MEM_FREE=$((MEM_FREE + 4096))
       else
         cleanup_swap
-        echo "    No se pudo crear la swap; se sigue igualmente."
+        echo "    No se pudo crear la swap (¿contenedor?). Se compila con lo que hay."
       fi
     fi
+
     NODE_MEM=$((MEM_FREE * 75 / 100))
-    [ "$NODE_MEM" -lt 1024 ] && NODE_MEM=1024
+    [ "$NODE_MEM" -lt 1536 ] && NODE_MEM=1536
     [ "$NODE_MEM" -gt 4096 ] && NODE_MEM=4096
-    echo "    Memoria para node: ${NODE_MEM} MB (libre: ${MEM_FREE} MB)"
+    echo "    Memoria para node: ${NODE_MEM} MB (libre: ${MEM_FREE} MB, swap: ${SWAP_TOTAL} MB)"
+
+    # Compilar necesita sitio: se rehace public/assets entero. Si el disco está
+    # lleno, webpack muere sin decir por qué y el panel se queda sin frontend.
+    DISCO_LIBRE_MB=$(df -Pm "$PANEL" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "${DISCO_LIBRE_MB:-}" ] && [ "$DISCO_LIBRE_MB" -lt 1024 ]; then
+      echo ""
+      echo "    AVISO: solo quedan ${DISCO_LIBRE_MB} MB libres en el disco."
+      echo "           Compilar necesita cerca de 1 GB. Si falla, es por esto:"
+      echo "             df -h $PANEL"
+    fi
 
     # Los paneles 1.14/1.15 compilan con webpack 5, que NO necesita
     # --openssl-legacy-provider. Solo se activa si el panel trae webpack 4.
@@ -462,19 +509,31 @@ if [ "$DO_BUILD" = "1" ]; then
       echo "    ============================================================="
       # Diagnóstico legible: primero las causas típicas, luego el error real
       # sin el ruido de Browserslist / Tailwind / DeprecationWarning.
-      if grep -qiE "heap out of memory|Allocation failed|Killed|JavaScript heap" "$BUILD_LOG"; then
-        echo "    CAUSA: se quedó SIN MEMORIA."
-        echo "    Solución: añade swap y vuelve a ejecutar el instalador:"
+      if grep -qiE "heap out of memory|Allocation failed|Killed|JavaScript heap|signal SIGKILL" "$BUILD_LOG" \
+         || [ "$BUILD_RC" = "137" ]; then
+        echo "    CAUSA: se quedó SIN MEMORIA (el sistema mató la compilación)."
+        echo "    Solución: añade swap permanente y vuelve a lanzar el instalador:"
         echo "      fallocate -l 4G /swapfile && chmod 600 /swapfile && \\"
         echo "        mkswap /swapfile && swapon /swapfile && \\"
         echo "        echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+      elif grep -qiE "ENOSPC|no space left on device" "$BUILD_LOG"; then
+        echo "    CAUSA: se quedó SIN ESPACIO EN DISCO."
+        echo "    Mira cuánto queda y libera sitio:"
+        echo "      df -h $PANEL"
       elif grep -q "ERROR in" "$BUILD_LOG"; then
         echo "    Errores de compilación encontrados:"
         grep -A3 "ERROR in" "$BUILD_LOG" | head -n 30 | sed 's/^/      /'
       else
-        echo "    Últimas líneas del registro:"
-        grep -viE "Browserslist|caniuse|tailwindcss|DeprecationWarning|warning |^warn |funding|npm notice" "$BUILD_LOG" \
-          | tail -n 20 | sed 's/^/      /'
+        # Ni errores de webpack ni causa conocida: webpack se cortó sin decir
+        # nada. Aquí NO se filtra el registro, porque filtrando se quedaba en
+        # blanco y no había forma de saber qué pasó.
+        echo "    webpack no dejó ningún error: se cortó de golpe."
+        echo "    Suele ser falta de memoria o de disco. Situación de la máquina:"
+        free -m 2>/dev/null | sed 's/^/      /'
+        df -Ph "$PANEL" 2>/dev/null | sed 's/^/      /'
+        echo ""
+        echo "    Últimas líneas del registro tal cual:"
+        tail -n 25 "$BUILD_LOG" | sed 's/^/      /'
       fi
       echo "    -------------------------------------------------------------"
       echo "    Registro completo: $BUILD_LOG"

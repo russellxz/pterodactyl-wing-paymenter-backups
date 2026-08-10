@@ -215,10 +215,29 @@ else
     cp -a "$PANEL/public/assets" "$ASSETS_BACKUP/assets"
   fi
 
+  # Mismos umbrales que el instalador: con poca RAM se añade swap temporal,
+  # con "dd" si "fallocate" no va. Sin esto, desinstalar en una máquina justa
+  # de memoria dejaba el panel sin frontend.
+  SWAPFILE="/swapfile-pterobackups"
   MEM_FREE=$(free -m 2>/dev/null | awk '/^Mem:/ {print ($7 != "" && $7 != 0 ? $7 : $4)}')
   MEM_FREE=${MEM_FREE:-2048}
+  SWAP_TOTAL=$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}')
+  SWAP_TOTAL=${SWAP_TOTAL:-0}
+
+  if [ "$MEM_FREE" -lt 2200 ] && [ "$SWAP_TOTAL" -lt 2000 ] \
+     && command -v mkswap >/dev/null 2>&1 && [ ! -e "$SWAPFILE" ]; then
+    echo "    Solo hay ${MEM_FREE} MB de RAM libre: se añade swap temporal de 4 GB."
+    if (fallocate -l 4G "$SWAPFILE" 2>/dev/null || dd if=/dev/zero of="$SWAPFILE" bs=1M count=4096 status=none 2>/dev/null) \
+       && chmod 600 "$SWAPFILE" && mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon "$SWAPFILE" 2>/dev/null; then
+      MEM_FREE=$((MEM_FREE + 4096))
+      QUITAR_SWAP=1
+    else
+      rm -f "$SWAPFILE"
+    fi
+  fi
+
   NODE_MEM=$((MEM_FREE * 75 / 100))
-  [ "$NODE_MEM" -lt 1024 ] && NODE_MEM=1024
+  [ "$NODE_MEM" -lt 1536 ] && NODE_MEM=1536
   [ "$NODE_MEM" -gt 4096 ] && NODE_MEM=4096
 
   echo ""

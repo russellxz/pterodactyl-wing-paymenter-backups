@@ -38,9 +38,19 @@ El comando es idempotente (si ya está, no lo duplica), respeta el resto de tu m
 
 Usa `sudo bash install.sh --no-build`: el área de admin queda funcionando al instante y el botón del menú de los usuarios aparecerá cuando ejecutes `cd /var/www/pterodactyl && yarn build:production`. Mientras tanto, la página sigue siendo accesible en `https://TU-PANEL/pterobackups/server/<id-del-servidor>`.
 
-### Si la recompilación falla
+### Si la recompilación falla (red de seguridad)
 
-El instalador **no se detiene**: el área de admin, las rutas y la página quedan instaladas igual. Guarda toda la salida del build en `/tmp/pterobackups-build.log` y te enseña las últimas líneas del error. Con Arix, además, no añade el botón al menú hasta que el build funcione, para que no acabes con un botón que lleva a una página inexistente.
+`yarn build:production` ejecuta antes `yarn run clean`, que **borra `public/assets/*.js`**. Si el build falla después, el panel se queda sin frontend: pantalla en blanco. Por eso el instalador nunca compila sin red:
+
+1. **Copia** `public/assets` antes de tocar nada (en `storage/pterobackups-assets-<fecha>`).
+2. **Ajusta la memoria de node** al 75% de la libre, y si hay menos de 2 GB sin swap, crea una swap temporal de 4 GB que se quita sola al terminar.
+3. Compila guardando la salida en `storage/logs/pterobackups-build-<fecha>.log`.
+4. **Comprueba que el bundle existe de verdad** (`public/assets/bundle.*.js`), porque un build puede salir con código 0 y no generar nada.
+5. Si algo falla: **devuelve los assets** y **quita la entrada de `routes.ts`**, dejando ambos byte a byte como estaban. El panel sigue funcionando y el área de admin queda instalada igual.
+
+Además te dice la causa en lenguaje claro: si fue falta de memoria, te da el comando exacto para añadir swap; si fueron errores de compilación, te enseña los bloques `ERROR in` con contexto; y si no, las últimas líneas útiles del registro (sin el ruido de Browserslist, Tailwind y DeprecationWarning).
+
+Con Arix, el botón del menú no se añade hasta que el build funcione, para que nunca acabes con un botón que lleva a una página inexistente.
 
 ## Requisitos
 
@@ -78,16 +88,21 @@ cd extension
 sudo bash install.sh
 ```
 
-## Desinstalar
+## Desinstalar (incluida cualquier versión antigua)
+
+Un solo comando quita **las dos versiones**: la actual (entrada nativa en `routes.ts` + `<li>` en Blade + enlace de Arix) y la antigua (los `inject.js` que se metían en todas las plantillas). Es seguro ejecutarlo aunque no sepas cuál tienes:
 
 ```bash
-cd /opt/pterodactyl-backup/extension
-sudo bash uninstall.sh
+cd /opt/pterodactyl-backup/extension && sudo bash uninstall.sh
 ```
+
+Deja `routes.ts` **byte a byte** como estaba, limpia todas las plantillas donde hubiera scripts inyectados, revierte la ruta comodín de React, quita las rutas y borra los archivos. Comprobado con `diff` contra un panel virgen.
+
+Si prefieres no recompilar en ese momento, añade `--no-build` (el botón del menú de usuario desaparecerá cuando compiles).
 
 ## Solución de problemas
 
-- **No aparece "Backup 2.0" en el menú del servidor:** recarga con `Ctrl + F5` (caché del navegador). Comprueba que el script quedó inyectado: `grep pterobackups /var/www/pterodactyl/resources/views/templates/wrapper.blade.php` y limpia vistas: `cd /var/www/pterodactyl && php artisan view:clear`.
+- **No aparece "Backup 2.0" en el menú del servidor:** recarga con `Ctrl + F5` (caché del navegador) y ejecuta `sudo bash check.sh`, que te dice si la entrada está registrada y si el panel se recompiló **después** de registrarla. Con el tema Arix, además hace falta el enlace en su lista: `cd /var/www/pterodactyl && php artisan pterobackups:arix-link`.
 - **/admin/pterobackups da 404:** limpia las rutas: `cd /var/www/pterodactyl && php artisan route:clear`.
 - **Error 500:** mira el log del panel: `tail -50 /var/www/pterodactyl/storage/logs/laravel-$(date +%F).log` y ejecuta `cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload -o`.
 - **"No se pudo conectar" al guardar:** comprueba que la URL del sistema abre en el navegador y que la clave es la de **Configuración → Extensión del panel** (sin espacios). Si regeneraste la clave en el sistema, pégala de nuevo aquí.

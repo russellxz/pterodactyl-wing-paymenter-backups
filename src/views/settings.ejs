@@ -89,4 +89,22 @@
   </div>
 </section>
 
+<section class="card">
+  <h2><i data-lucide="key-round"></i>External API</h2>
+  <p class="muted">For your own systems (an automated assistant, a script, another platform) to query and download backups by the client's email, without touching the web. Every request needs this key <em>and</em> an <code>email</code> parameter; only backups belonging to that exact email are ever returned. Full reference in <code>docs/external-api.md</code>.</p>
+  <div class="form-grid">
+    <label>Base URL
+      <input readonly value="<%= extUrl %>/api/client" onclick="this.select()">
+    </label>
+    <label>API key
+      <input readonly value="<%= clientApiKey %>" onclick="this.select()">
+    </label>
+  </div>
+  <div class="form-actions">
+    <form method="post" action="/settings/regen-client-key" class="inline" data-confirm="Generate a NEW key? Whatever uses the current one will stop working until you update it.">
+      <button class="btn btn-warn" type="submit"><i data-lucide="refresh-ccw"></i>Regenerate key</button>
+    </form>
+  </div>
+</section>
+
 <%- include('partials/foot') %>

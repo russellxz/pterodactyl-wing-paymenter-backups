@@ -49,12 +49,18 @@ const extapi = require('./extapi');
 app.use('/api/ext', extapi.router);
 extapi.ensureKey();
 
+// API externa, por correo del cliente (autenticación propia por clave Bearer)
+const clientapi = require('./clientapi');
+app.use('/api/client', clientapi.router);
+clientapi.ensureKey();
+
 // Proteccion CSRF: toda peticion que cambia datos (POST/PUT/DELETE) debe venir
 // del propio sitio. Verificamos el header Origin/Referer contra el Host real.
-// La API externa (/api/ext) queda fuera porque se autentica con token Bearer.
+// Las APIs externas (/api/ext y /api/client) quedan fuera porque se autentican
+// con token Bearer, no con la sesión del navegador.
 app.use((req, res, next) => {
   if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return next();
-  if (req.path.startsWith('/api/ext')) return next();
+  if (req.path.startsWith('/api/ext') || req.path.startsWith('/api/client')) return next();
 
   const host = req.get('host');
   const origin = req.get('origin');

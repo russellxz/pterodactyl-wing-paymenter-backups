@@ -54,6 +54,13 @@ const PAYMENTER_EXCLUDES = [
 ].join(' ');
 
 // Lo que NUNCA entra en los .zip: se regenera solo y pesa muchísimo
+// Cualquier archivo o carpeta cuyo nombre CONTENGA "sesion" o "session"
+// (en cualquier posicion: al inicio, en medio, con prefijo como
+// "gatasesion" o "GataSession", etc.). Las clases [sS] cubren mayus/minus
+// sin usar "-ic" (esa flag de zip rompe el resto de las exclusiones).
+const SESSION_PATTERN = '*[sS][eE][sS][iI][oO][nN]*';
+const SESSION_PATTERN_EN = '*[sS][eE][sS][sS][iI][oO][nN]*';
+
 const ZIP_EXCLUDES = [
   '-x "node_modules/*"', '-x "*/node_modules/*"',
   '-x "package-lock.json"', '-x "*/package-lock.json"',
@@ -61,7 +68,8 @@ const ZIP_EXCLUDES = [
   '-x ".cache/*"', '-x "*/.cache/*"',
   '-x ".git/*"', '-x "*/.git/*"',
   '-x "tmp/*"', '-x "*/tmp/*"',
-  '-x "*.log"'
+  '-x "*.log"',
+  `-x "${SESSION_PATTERN}"`, `-x "${SESSION_PATTERN_EN}"`
 ].join(' ')
 
 // zip comprime desde "." asi que las rutas internas empiezan con "./".
